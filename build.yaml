@@ -3,10 +3,10 @@
 # The version must match the .csproj's <Version> and the README's install path;
 # scripts/check-version.sh checks them, and the release workflow checks the tag against them
 # (v0.1.0 for 0.1.0.0). The changelog is what Jellyfin's plugin catalog shows for this version:
-# rewrite it for every release. See README.md, "Releasing".
+# rewrite it for every release. Releasing: .github/workflows/release.yml.
 name: "KasuVideo Companion"
 guid: "03029e1f-b932-4b53-b101-aa9fd84158a3"
-version: "0.1.0.0"
+version: "0.1.1.0"
 # Jellyfin 10.11 and newer (checked on 10.11.11 and 12.1.0).
 targetAbi: "10.11.0.0"
 framework: "net9.0"
@@ -28,6 +28,5 @@ image: "image.png"
 artifacts:
   - "Jellyfin.Plugin.KasuVideoCompanion.dll"
 changelog: >
-  0.1.0: first release. Serves plugins' KasuVideo manifests to every signed-in
-  user (GET /KasuVideo/Companion/Manifests) and tells administrators what each
-  plugin implements (GET /KasuVideo/Companion/Implementations). Contract 1.
+  0.1.1: the README now discloses the AI tools used to make the companion. The
+  plugin itself is unchanged from 0.1.0.

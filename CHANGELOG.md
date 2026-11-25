@@ -6,6 +6,13 @@ GitHub release notes; Jellyfin's plugin catalog shows `changelog` in `build.yaml
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-25
+
+### Changed
+- The README discloses the AI tools used to make the companion, as Jellyfin's LLM/AI
+  Development Policy asks of projects around Jellyfin.
+- The plugin itself is unchanged.
+
 ## [0.1.0] - 2026-11-25
 
 ### Added

@@ -10,7 +10,9 @@ name: Release
 #      Jellyfin servers that use https://<owner>.github.io/<repository>/manifest.json as a
 #      plugin repository offer it. GitHub Pages must deploy from that branch: Settings > Pages >
 #      Deploy from a branch > gh-pages, / (root).
-# How to release: README.md, "Releasing".
+# How to release: set the new version in the four places scripts/check-version.sh checks
+# (and rewrite the changelog in build.yaml), commit to main, then push an annotated tag
+# v<version> (git tag -a v0.2.0 -m "KasuVideo Companion 0.2.0"; git push origin v0.2.0).
 
 on:
   push:

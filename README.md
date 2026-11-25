@@ -73,13 +73,13 @@ installed are offered each new version. It needs Jellyfin 10.11 or newer.
 ### By hand
 
 Build it (below), copy the DLL into a folder of its own under the server's plugin folder,
-`<config>/plugins/KasuVideo Companion_0.1.0.0/`, then restart the server. For a server in
+`<config>/plugins/KasuVideo Companion_0.1.1.0/`, then restart the server. For a server in
 Docker (a container named `jellyfin`, config at `/config`):
 
 ```bash
 # Under Git Bash on Windows, stop it rewriting paths first: export MSYS_NO_PATHCONV=1
 docker cp bin/Release/net9.0/Jellyfin.Plugin.KasuVideoCompanion.dll jellyfin:/tmp/c.dll
-docker exec jellyfin sh -c 'mkdir -p "/config/plugins/KasuVideo Companion_0.1.0.0" && mv /tmp/c.dll "/config/plugins/KasuVideo Companion_0.1.0.0/Jellyfin.Plugin.KasuVideoCompanion.dll"'
+docker exec jellyfin sh -c 'mkdir -p "/config/plugins/KasuVideo Companion_0.1.1.0" && mv /tmp/c.dll "/config/plugins/KasuVideo Companion_0.1.1.0/Jellyfin.Plugin.KasuVideoCompanion.dll"'
 docker restart jellyfin
 ```
 
