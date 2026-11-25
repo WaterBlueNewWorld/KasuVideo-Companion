@@ -1,5 +1,16 @@
 # KasuVideo Companion
+# THIS WAS DONE USING AI - Thanks for your attention! :p
 
+> This package and its parent project (KasuVideo yet to be made public, probably next week idk), was done using tools such as "Claude code" with the guidance of a human (Me, WaterBlueNewWorld) which makes plugin/repository this qualify as "AI Slop", you are free to install this plugin (Despite it would do nothing on your current Jellyfin server); you are free to contribute, copy or modify this plugin however you want. I write up this and any issue which may come to me regarding the usage of AI assumes that you already read this disclaimer. 
+>
+> I am open to any suggestions for this plugin c:
+>
+> BTW the logo was not done using AI (What a surprise! right?), it was done by one of my closest friends @BosefoSefo (On Twitter/X).
+
+> As for the reason on why use AI for this?
+> * Simple, I was bored and I am lazy.
+
+## Your AI Slop plugin, sir.
 A small Jellyfin server plugin made for KasuVideo, a web frontend for Jellyfin. It answers two
 questions Jellyfin itself doesn't answer for KasuVideo:
 
@@ -101,47 +112,6 @@ provides them.
 | `.github/workflows/ci.yml` | On every push to `main`: the version check and the build. |
 | `.github/workflows/release.yml` | On a `v*` tag: CI, the zip, the GitHub release and the plugin repository. |
 | `LICENSE` | The GNU Affero General Public License, version 3. |
-
-## Releasing
-
-Releases are tags `v<version>` (`v0.1.0` for 0.1.0.0), published by
-`.github/workflows/release.yml`.
-
-1. **The version**, in four places (`scripts/check-version.sh` checks them):
-   - `Jellyfin.Plugin.KasuVideoCompanion.csproj`: `<Version>0.2.0.0</Version>`;
-   - `build.yaml`: `version: "0.2.0.0"`, and rewrite its `changelog` (what Jellyfin's catalog
-     shows for this version); raise `targetAbi` only if it needs a newer Jellyfin;
-   - this README's install path, `KasuVideo Companion_0.2.0.0`;
-   - `CHANGELOG.md`: move `[Unreleased]` into `## [0.2.0] - YYYY-MM-DD`.
-2. **Check** it, build it, and try it on a test server as an administrator and as a regular
-   user (Building, Installing):
-
-   ```bash
-   bash scripts/check-version.sh v0.2.0
-   ```
-
-3. **Commit** to `main`, then tag that commit and push the tag:
-
-   ```bash
-   git tag -a v0.2.0 -m "KasuVideo Companion 0.2.0"
-   git push origin v0.2.0
-   ```
-
-   The workflow runs CI, checks the tag against the version, builds the zip with jprm 1.1.0,
-   creates the GitHub release (a pre-release while the version is 0.x) with the zip and the
-   changelog section, and adds the version and the picture to `manifest.json` on the
-   `gh-pages` branch, creating the branch the first time.
-4. **GitHub Pages** must deploy from that branch: Settings › Pages › Deploy from a branch ›
-   `gh-pages`, `/ (root)` (once; check it after the first release). The plugin repository is
-   then at the address above.
-
-**Trying a release before it is published.** Everything the workflow does can be done locally:
-`pip install jprm==1.1.0`, then `jprm plugin build . -o <folder>` on a copy of the repository
-(jprm rewrites the project file), `jprm repo init site` on an empty `site` folder and
-`jprm repo add -u <address> site <folder>/<zip>`. Serve `site` where the server can reach it
-(for a server in Docker: an nginx container started with `--network container:<jellyfin>`, so
-it is `http://localhost/manifest.json` for Jellyfin and nothing is exposed), add that address as
-a repository, and install from the Catalog.
 
 ## Where it was checked
 
