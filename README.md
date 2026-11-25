@@ -1,9 +1,9 @@
 # KasuVideo Companion
 # THIS WAS DONE USING AI - Thanks for your attention! :p
 
-> This package and its parent project (KasuVideo yet to be made public, probably next week idk), was done using tools such as "Claude code" with the guidance of a human (Me, WaterBlueNewWorld) which makes plugin/repository this qualify as "AI Slop", you are free to install this plugin (Despite it would do nothing on your current Jellyfin server); you are free to contribute, copy or modify this plugin however you want. I write up this and any issue which may come to me regarding the usage of AI assumes that you already read this disclaimer. 
+> This package and its parent project (KasuVideo yet to be made public, probably next week idk), was done using tools such as "Claude code" with the guidance of a human (Me, WaterBlueNewWorld) which makes this plugin/repository qualify as "AI Slop", you are free to install this plugin (Despite it would do nothing on your current Jellyfin server) and you are free to contribute, copy or modify it however you want. Any issue which may come to me regarding the usage of AI, assumes that you have already read this disclaimer. 
 >
-> I am open to any suggestions for this plugin c:
+> I am open to any suggestions for this plugin, as I plan to maintain it (with or without AI) c:
 >
 > BTW the logo was not done using AI (What a surprise! right?), it was done by one of my closest friends @BosefoSefo (On Twitter/X).
 
