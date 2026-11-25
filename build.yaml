@@ -1,0 +1,33 @@
+# Manifest for jprm (Jellyfin Plugin Repository Manager), which builds the plugin's zip and its
+# entry in the plugin repository: `jprm plugin build .`.
+# The version must match the .csproj's <Version> and the README's install path;
+# scripts/check-version.sh checks them, and the release workflow checks the tag against them
+# (v0.1.0 for 0.1.0.0). The changelog is what Jellyfin's plugin catalog shows for this version:
+# rewrite it for every release. See README.md, "Releasing".
+name: "KasuVideo Companion"
+guid: "03029e1f-b932-4b53-b101-aa9fd84158a3"
+version: "0.1.0.0"
+# Jellyfin 10.11 and newer (checked on 10.11.11 and 12.1.0).
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+owner: "WaterBlueNewWorld"
+overview: "Lets KasuVideo show what your other plugins add to it, for every user"
+description: >
+  Made for KasuVideo, a web frontend for Jellyfin. Plugins can add entries to
+  KasuVideo's item menus and pages to its Dashboard by publishing a manifest (a
+  *.kasuvideo.json page). Jellyfin lists plugin pages to administrators only, so
+  without this plugin only administrators see those additions; with it, every
+  signed-in KasuVideo user does. It also tells KasuVideo's administrators what each
+  plugin does for the server: the Jellyfin interfaces its classes implement
+  (metadata and picture providers, scheduled tasks, services...) and the API routes
+  it adds. It has no settings, no pages and no effect on Jellyfin's own web client,
+  and changes nothing on the server. Free software under the GNU AGPL v3 (source:
+  https://github.com/WaterBlueNewWorld/KasuVideo-Companion).
+category: "General"
+image: "image.png"
+artifacts:
+  - "Jellyfin.Plugin.KasuVideoCompanion.dll"
+changelog: >
+  0.1.0: first release. Serves plugins' KasuVideo manifests to every signed-in
+  user (GET /KasuVideo/Companion/Manifests) and tells administrators what each
+  plugin implements (GET /KasuVideo/Companion/Implementations). Contract 1.

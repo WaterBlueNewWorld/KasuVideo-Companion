@@ -1,0 +1,107 @@
+name: Release
+
+# Publishes the KasuVideo Companion when a tag such as v0.1.0 is pushed (matching the .csproj,
+# build.yaml, README and CHANGELOG; scripts/check-version.sh):
+#   1. runs CI (ci.yml);
+#   2. builds the plugin's zip with jprm, Jellyfin's plugin repository tool;
+#   3. creates a GitHub release with the zip, the CHANGELOG section as notes (a pre-release
+#      while the version is 0.x);
+#   4. adds the version to manifest.json on the gh-pages branch (with the plugin's picture), so
+#      Jellyfin servers that use https://<owner>.github.io/<repository>/manifest.json as a
+#      plugin repository offer it. GitHub Pages must deploy from that branch: Settings > Pages >
+#      Deploy from a branch > gh-pages, / (root).
+# How to release: README.md, "Releasing".
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Publish
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release and push gh-pages
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Tag matches the version
+        run: bash scripts/check-version.sh "$TAG"
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "9.0.x"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build the plugin zip
+        id: build
+        run: |
+          pip install jprm==1.1.0
+          out="$RUNNER_TEMP/artifacts"
+          mkdir -p "$out"  # jprm does not create it
+          zip="$(jprm --verbosity=info plugin build . -o "$out")"
+          echo "zip=$zip" >>"$GITHUB_OUTPUT"
+          echo "name=$(basename "$zip")" >>"$GITHUB_OUTPUT"
+          # jprm rewrites the project file while building; leave the checkout clean.
+          git checkout -- .
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '
+            /^## \[/ { if (found) exit; if (index($0, "[" v "]")) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md >"$RUNNER_TEMP/notes.md"
+          [[ -s "$RUNNER_TEMP/notes.md" ]] || { echo "No CHANGELOG section for $version" >&2; exit 1; }
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=()
+          [[ "$TAG" == v0.* ]] && prerelease=(--prerelease)
+          gh release create "$TAG" "${{ steps.build.outputs.zip }}" --verify-tag \
+            "${prerelease[@]}" --title "KasuVideo Companion ${TAG#v}" \
+            --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: Add the version to the plugin repository (gh-pages)
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          site_url="https://$owner.github.io/${GITHUB_REPOSITORY#*/}"
+          zip_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${{ steps.build.outputs.name }}"
+          site="$RUNNER_TEMP/site"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin gh-pages; then
+            git worktree add "$site" FETCH_HEAD
+            git -C "$site" switch -c gh-pages
+          else
+            git worktree add --orphan -b gh-pages "$site"
+          fi
+          [[ -f "$site/manifest.json" ]] || jprm repo init "$site"
+          # The zip stays on the release (-U); the picture goes beside the manifest (-u).
+          jprm repo add -u "$site_url" -U "$zip_url" "$site" "${{ steps.build.outputs.zip }}"
+          touch "$site/.nojekyll"
+          git -C "$site" add -A
+          git -C "$site" commit -m "KasuVideo Companion ${TAG#v}"
+          git -C "$site" push origin gh-pages
+          echo "Plugin repository: $site_url/manifest.json"

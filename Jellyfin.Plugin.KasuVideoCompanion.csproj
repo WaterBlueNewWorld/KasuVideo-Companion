@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The KasuVideo companion: a Jellyfin plugin that tells KasuVideo what other plugins add to it
+    (their manifests, for every signed-in user) and, for administrators, which of Jellyfin's
+    interfaces each plugin implements. Built for Jellyfin 10.11 (.NET 9); see README.md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.KasuVideoCompanion</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.KasuVideoCompanion</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0.0</Version>
+    <Authors>WaterBlueNewWorld</Authors>
+    <Copyright>Copyright (C) 2026 WaterBlueNewWorld</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/WaterBlueNewWorld/KasuVideo-Companion</RepositoryUrl>
+    <!-- The lowest 10.11: Jellyfin loads a plugin on any server at or above its ABI. -->
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.11.0</JellyfinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The server provides these at runtime: compile against them, never ship them. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>
