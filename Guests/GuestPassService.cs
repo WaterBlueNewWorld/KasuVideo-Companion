@@ -400,6 +400,89 @@ public sealed class GuestPassService
         return null;
     }
 
+    /// <summary>
+    /// For a guest: ends their own pass (KasuVideo's Leave, <c>DELETE Guests/Me</c>). Only a guest
+    /// whose pass is live, and only their own: the account is always the caller's, never one
+    /// named in the request. Their devices are signed out and the account deleted; a delete that
+    /// fails is left for the sweeps (<see cref="SweepLeftoversAsync"/>).
+    /// </summary>
+    /// <param name="callerId">The user asking.</param>
+    /// <returns>Null when it's ended, otherwise why not: <c>not-guest</c>, or <c>guest-not-allowed</c> when their pass no longer lives.</returns>
+    public async Task<string?> EndMineAsync(Guid callerId)
+    {
+        if (_accounts.Describe(callerId) is not { IsGuest: true })
+        {
+            return GuestErrors.NotGuest;
+        }
+
+        var pass = LivePassOf(callerId);
+        if (pass is null)
+        {
+            return GuestAccessRules.NotAllowed;
+        }
+
+        await EndPassAsync(pass.Id, EndReasons.Left).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>
+    /// Deletes every guest account without a live pass: one whose pass has ended or run out (that
+    /// pass is ended too), or one no pass owns (a crash, a delete that failed). An account is never
+    /// reused: every pass makes a new one. Runs in the five-minute cleanup and on its own every
+    /// hour (<see cref="LeftoverGuestAccountsTask"/>). While a link is being opened its new account
+    /// isn't on its pass yet, so nothing is swept then (for <see cref="ClaimHeld"/> at most).
+    /// </summary>
+    /// <param name="cancellationToken">Stops between accounts.</param>
+    /// <returns>How many accounts went.</returns>
+    public async Task<int> SweepLeftoversAsync(CancellationToken cancellationToken)
+    {
+        var now = Now;
+        var opening = _store.Read(passes => passes.Any(p =>
+            p.EndedAt is null && p.GuestUserId is null && p.RedeemedAt is { } at && now - at < ClaimHeld));
+        if (opening)
+        {
+            return 0;
+        }
+
+        var live = _store.Read(passes => passes
+            .Where(p => p.GuestUserId is not null && IsLive(p, now))
+            .Select(p => p.GuestUserId!.Value)
+            .ToHashSet());
+        var swept = 0;
+        foreach (var user in _accounts.GuestUserIds().Where(id => !live.Contains(id)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var open = _store.Read(passes => passes
+                .Where(p => p.GuestUserId == user && p.EndedAt is null)
+                .Select(p => p.Id)
+                .ToList());
+            try
+            {
+                if (open.Count == 0)
+                {
+                    await _accounts.EndAsync(user).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Ran out without the five-minute task ending it: ending it deletes the account.
+                    foreach (var id in open)
+                    {
+                        await EndPassAsync(id, EndReasons.Expired).ConfigureAwait(false);
+                    }
+                }
+
+                swept++;
+            }
+            catch (Exception e)
+            {
+                // The next sweep tries again.
+                _logger.LogError(e, "Deleting leftover guest account {User} failed", user);
+            }
+        }
+
+        return swept;
+    }
+
     /// <summary>Ends every live pass, for <paramref name="reason"/> (turned off, uninstalled).</summary>
     /// <param name="reason">Why (<see cref="EndReasons"/>).</param>
     /// <returns>How many ended.</returns>
@@ -440,17 +523,7 @@ public sealed class GuestPassService
             }
         }
 
-        var owned = _store.Read(passes => passes
-            .Where(p => p.EndedAt is null && p.GuestUserId is not null)
-            .Select(p => p.GuestUserId!.Value)
-            .ToHashSet());
-        var orphans = 0;
-        foreach (var user in _accounts.GuestUserIds().Where(id => !owned.Contains(id)))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await _accounts.EndAsync(user).ConfigureAwait(false);
-            orphans++;
-        }
+        var orphans = await SweepLeftoversAsync(cancellationToken).ConfigureAwait(false);
 
         var forgotten = _store.Update(passes => passes.RemoveAll(p => p.EndedAt is { } at && now - at > EndedKept));
         if (ended + orphans > 0)

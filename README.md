@@ -76,11 +76,13 @@ From 0.2.0, the settings and guest passes:
 | `POST /KasuVideo/Guests/Invites/Preview` | Anyone (limited per address) | `{ "Code" }`: who invited them and until when the link works; `404 invalid` otherwise, never saying why. |
 | `POST /KasuVideo/Guests/Redeem` | Anyone (limited per address) | `{ "Code", "Nickname", "DeviceId", "DeviceName", "AppVersion" }`: opens the link, once; makes the guest's account and answers its session (`AccessToken`, `UserId`, `UserName`, `ServerId`), the room's `GroupId` and `EndsAt`. |
 | `GET /KasuVideo/Guests/Me` | A guest | Their pass: `PassId`, `GroupId`, `InviterId`, `InviterName`, `EndsAt`; `404 not-guest` for anyone else. |
+| `DELETE /KasuVideo/Guests/Me` | A guest whose pass lives | Ends their own pass (KasuVideo's Leave) and deletes their account; it takes no id, so it's only ever the caller's. `404 not-guest` for anyone else (nothing is touched), `403 guest-not-allowed` once the pass no longer lives. |
 | `GET /KasuVideo/Guests/Passes` | Administrators | Every pass, live and ended in the last week, with why each ended. |
 
 Refusals answer `{ "Error": code }`: `off`, `not-inviter`, `guest`, `not-in-group` (403);
 `bad-group`, `bad-libraries`, `bad-hours`, `bad-name`, `bad-device` (400); `too-many`,
-`name-taken` (409); `invalid`, `not-found` (404); `too-many-requests` (429); `failed` (500).
+`name-taken` (409); `invalid`, `not-found`, `not-guest` (404); `too-many-requests` (429);
+`failed` (500); and from the guard, `guest-not-allowed`, `guest-item`, `guest-group` (403).
 
 ## Settings
 
@@ -120,12 +122,21 @@ on the server. The design is in KasuVideo's repository (`docs/GUEST_PASSES.md`).
    administrator can change. Its policy: hidden, the invite's libraries only, Watch together
    join-only, one session, the guest bitrate and transcoding settings, and nothing else (no
    downloads, sharing, Live TV, preferences, control of others' devices or any management).
-4. **The end.** The inviter or an administrator ends it, or it reaches its length, or the guest
-   goes `IdleMinutes` without a session, or its inviter is no longer listed, or guest passes are
-   turned off. Ending signs out every device of the guest (their token stops working, and they
-   leave their Watch together group), then deletes the user. A scheduled task ("Guest passes",
-   under KasuVideo) does this every five minutes and at startup, and also deletes any guest
-   account no live pass owns (left by a crash). Uninstalling the companion ends every pass.
+4. **The end.** The guest leaves (KasuVideo's Leave, `DELETE Guests/Me`), or the inviter or an
+   administrator ends it, or it reaches its length, or the guest goes `IdleMinutes` without a
+   session, or its inviter is no longer listed, or guest passes are turned off. Ending signs out
+   every device of the guest (their token stops working, and they leave their Watch together
+   group), then deletes the user. Uninstalling the companion ends every pass.
+5. **Leftover accounts.** Two scheduled tasks, under KasuVideo, delete any guest account without
+   a live pass (left by a crash, or a delete that failed, say a Leave over a dropped connection;
+   or whose pass ran out):
+   - **Guest passes**, every five minutes and at startup, which also ends the passes that are due;
+   - **Leftover guest accounts**, every hour and at startup, which keeps working if an
+     administrator turns the other off.
+
+   An account is never reused: every pass makes a new one (a lingering `Mika-G` makes the next
+   `Mika2-G`), and the guard refuses an account without a live pass. While a link is being
+   opened, its new account isn't on its pass yet, so neither task sweeps then.
 
 The passes are kept in `guest-passes.json` in the plugin's folder
 (`<config>/plugins/Jellyfin.Plugin.KasuVideoCompanion/`); ended ones are forgotten after a week.
@@ -155,7 +166,8 @@ an allow-list gets through (`Guests/GuestAccessRules.cs`). Everything else answe
   segments), subtitles, attachments, trickplay and media segments, only for items queued in
   those groups, plus an episode's season and series. Items by id (`/Items?ids=…`) only when
   every one was queued. Pictures are public in Jellyfin anyway.
-- **The companion:** `Info`, `RoomSettings` and `Guests/Me`. Other plugins' routes are refused.
+- **The companion:** `Info`, `RoomSettings`, `Guests/Me` and leaving (`DELETE Guests/Me`, only
+  their own pass). Other plugins' routes are refused.
 - **Refused, among the rest:** browsing (libraries, `/Items` without ids, search, Latest,
   Resume, Next up, episodes lists), other users, sessions, favourites, played state, downloads,
   writing preferences, Quick Connect, settings, the companion's other routes.
@@ -233,7 +245,7 @@ out). CI runs it on every push to `main`.
 | `Api/SettingsController.cs` | Settings and RoomSettings. |
 | `Api/GuestsController.cs` | Guest passes' routes. |
 | `Configuration/` | The settings (`PluginConfiguration`) and their ranges (`SettingsBounds`). |
-| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the cleanup task, the visitors' rate limit, and the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`). |
+| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the two scheduled tasks (`GuestPassCleanupTask`, `LeftoverGuestAccountsTask`), the visitors' rate limit, and the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`). |
 | `tests/` | The tests ([Testing](#testing)). |
 | `Jellyfin.Plugin.KasuVideoCompanion.csproj` | The project; its `<Version>` is the plugin's version. |
 | `build.yaml` | What jprm (Jellyfin's plugin repository tool) needs to package it: name, id, version, `targetAbi`, the catalog's texts and this version's changelog. |

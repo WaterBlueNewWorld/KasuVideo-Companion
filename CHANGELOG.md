@@ -23,6 +23,12 @@ GitHub release notes; Jellyfin's plugin catalog shows `changelog` in `build.yaml
   ready, leave; never control it or start one), and what that room has queued (with an
   episode's season and series). Browsing, search, other users and groups, writes and other
   plugins answer 403. The pass follows the room when its owner starts a new group.
+- **A guest can leave:** `DELETE /KasuVideo/Guests/Me` ends their own pass at once and deletes
+  their account (only a guest whose pass lives, and only their own).
+- **A "Leftover guest accounts" scheduled task**, every hour and at startup, deletes guest
+  accounts without a live pass (a crash, a failed delete, a pass that ran out), besides the
+  five-minute "Guest passes" task. An account is never reused for another pass, and neither task
+  sweeps while a link is being opened.
 - `Info` answers `Capabilities`, what this version can do.
 - Tests (xUnit, `tests/`), run by CI.
 

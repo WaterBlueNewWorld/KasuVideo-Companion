@@ -129,7 +129,22 @@ public class GuestsController : ControllerBase
     {
         var caller = await _auth.GetAuthorizationInfo(Request).ConfigureAwait(false);
         var me = _passes.Me(caller.UserId);
-        return me is null ? NotFound(new { Error = "not-guest" }) : me;
+        return me is null ? NotFound(new { Error = GuestErrors.NotGuest }) : me;
+    }
+
+    /// <summary>
+    /// For a guest: ends their own pass (KasuVideo's Leave). It takes no id: the pass is always the
+    /// caller's. <c>404 not-guest</c> for anyone who isn't a guest (nothing is touched), and
+    /// <c>403 guest-not-allowed</c> once their pass no longer lives (the guard says so first).
+    /// </summary>
+    /// <returns>204, or why not.</returns>
+    [HttpDelete("Me")]
+    [Authorize]
+    public async Task<ActionResult> EndMe()
+    {
+        var caller = await _auth.GetAuthorizationInfo(Request).ConfigureAwait(false);
+        var error = await _passes.EndMineAsync(caller.UserId).ConfigureAwait(false);
+        return error is null ? NoContent() : Refuse(error);
     }
 
     /// <summary>For administrators: every pass, live and recently ended.</summary>
@@ -145,10 +160,10 @@ public class GuestsController : ControllerBase
 
     private static int StatusOf(string code) => code switch
     {
-        "off" or "not-inviter" or "guest" or "not-in-group" or GuestErrors.Forbidden => StatusCodes.Status403Forbidden,
+        "off" or "not-inviter" or "guest" or "not-in-group" or GuestErrors.Forbidden or GuestAccessRules.NotAllowed => StatusCodes.Status403Forbidden,
         "bad-group" or "bad-libraries" or "bad-hours" or "bad-name" or "bad-device" => StatusCodes.Status400BadRequest,
         "too-many" or "name-taken" => StatusCodes.Status409Conflict,
-        "invalid" or GuestErrors.NotFound => StatusCodes.Status404NotFound,
+        "invalid" or GuestErrors.NotFound or GuestErrors.NotGuest => StatusCodes.Status404NotFound,
         "too-many-requests" => StatusCodes.Status429TooManyRequests,
         _ => StatusCodes.Status500InternalServerError,
     };

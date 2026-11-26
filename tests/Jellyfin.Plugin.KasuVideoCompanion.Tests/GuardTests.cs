@@ -144,6 +144,9 @@ public class GuestAccessRulesTests
     public void OfTheCompanionOnlyWhatAGuestNeedsAndOfOtherPluginsNothing()
     {
         Assert.Equal(GuestVerdict.Allow, Ask("Guests", "Me", ns: Companion));
+        // Their own pass, to leave (the route checks it's theirs and live).
+        Assert.Equal(GuestVerdict.Allow, Ask("Guests", "EndMe", ns: Companion));
+        Assert.Equal(GuestAccessRules.NotAllowed, Ask("Guests", "EndInvite", ns: Companion).Error);
         Assert.Equal(GuestVerdict.Allow, Ask("Companion", "Info", ns: Companion));
         Assert.Equal(GuestVerdict.Allow, Ask("Settings", "GetRoomSettings", ns: Companion));
         Assert.Equal(GuestAccessRules.NotAllowed, Ask("Guests", "CreateInvite", ns: Companion).Error);

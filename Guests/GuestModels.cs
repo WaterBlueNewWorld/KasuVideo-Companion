@@ -54,6 +54,9 @@ public static class GuestErrors
 
     /// <summary>Only the pass's inviter or an administrator may end it.</summary>
     public const string Forbidden = "forbidden";
+
+    /// <summary>The caller isn't a guest.</summary>
+    public const string NotGuest = "not-guest";
 }
 
 /// <summary>A value, or why there isn't one.</summary>

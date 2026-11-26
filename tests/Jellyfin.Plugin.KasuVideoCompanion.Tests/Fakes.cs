@@ -35,6 +35,9 @@ public sealed class FakeAccounts : IGuestAccounts
     /// <summary>When set, CreateAsync throws it.</summary>
     public Exception? CreateFails { get; set; }
 
+    /// <summary>When set, CreateAsync runs it once the account exists, before answering.</summary>
+    public Func<Task>? DuringCreate { get; set; }
+
     public UserFacts? Describe(Guid userId) => Users.GetValueOrDefault(userId);
 
     public bool IsInGroup(Guid userId, string? deviceId, Guid groupId) => InGroup.Contains((userId, groupId));
@@ -43,7 +46,7 @@ public sealed class FakeAccounts : IGuestAccounts
 
     public bool NameTaken(string name) => Users.Values.Any(u => u.Name == name);
 
-    public Task<CreatedGuest> CreateAsync(GuestAccountRequest request)
+    public async Task<CreatedGuest> CreateAsync(GuestAccountRequest request)
     {
         if (CreateFails is { } e)
         {
@@ -58,11 +61,24 @@ public sealed class FakeAccounts : IGuestAccounts
         Created.Add(request);
         var id = Guid.NewGuid();
         Users[id] = new UserFacts(id, request.UserName, false, true, false, request.LibraryIds);
-        return Task.FromResult(new CreatedGuest(id, request.UserName, "token-" + id.ToString("N"), "server-1"));
+        if (DuringCreate is { } during)
+        {
+            await during();
+        }
+
+        return new CreatedGuest(id, request.UserName, "token-" + id.ToString("N"), "server-1");
     }
+
+    /// <summary>Accounts whose EndAsync throws, as a failed delete.</summary>
+    public HashSet<Guid> EndFails { get; } = [];
 
     public Task EndAsync(Guid guestUserId)
     {
+        if (EndFails.Contains(guestUserId))
+        {
+            throw new InvalidOperationException("delete failed");
+        }
+
         Ended.Add(guestUserId);
         Users.Remove(guestUserId);
         return Task.CompletedTask;

@@ -102,4 +102,7 @@ public static class EndReasons
 
     /// <summary>Making the guest's account failed.</summary>
     public const string Failed = "failed";
+
+    /// <summary>The guest left (KasuVideo's Leave, <c>DELETE Guests/Me</c>).</summary>
+    public const string Left = "left";
 }

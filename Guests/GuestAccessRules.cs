@@ -59,10 +59,13 @@ public static class GuestAccessRules
     /// <summary>The route values that name the item, by the names Jellyfin's routes use.</summary>
     private static readonly string[] ItemRouteKeys = ["itemId", "routeItemId", "videoId"];
 
-    /// <summary>The companion's own routes a guest needs: is it there, room settings, their pass.</summary>
+    /// <summary>
+    /// The companion's own routes a guest needs: is it there, room settings, their pass, and
+    /// leaving (which ends only their own pass, <see cref="GuestPassService.EndMineAsync"/>).
+    /// </summary>
     private static readonly HashSet<string> CompanionRoutes = new(StringComparer.Ordinal)
     {
-        "CompanionController.Info", "SettingsController.GetRoomSettings", "GuestsController.Me",
+        "CompanionController.Info", "SettingsController.GetRoomSettings", "GuestsController.Me", "GuestsController.EndMe",
     };
 
     /// <summary>The companion's controllers' namespace.</summary>
