@@ -4,6 +4,8 @@
 using Jellyfin.Plugin.KasuVideoCompanion.Guests;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Session;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -11,8 +13,10 @@ namespace Jellyfin.Plugin.KasuVideoCompanion;
 
 /// <summary>
 /// Adds the companion's services to Jellyfin's: guest passes (<see cref="GuestPassService"/>,
-/// its store, its Jellyfin side and the visitors' rate limit). Jellyfin finds this class in the
-/// plugin's assembly and calls it once at startup.
+/// its store, its Jellyfin side and the visitors' rate limit), what it knows of Watch together
+/// groups (<see cref="GroupTracker"/>), and the guard every API call passes through
+/// (<see cref="GuestGuard"/>). Jellyfin finds this class in the plugin's assembly and calls it
+/// once at startup.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
@@ -27,5 +31,17 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             () => Plugin.Instance!.Configuration,
             TimeProvider.System,
             services.GetRequiredService<ILogger<GuestPassService>>()));
+
+        // A session that ends leaves its group (Jellyfin's SyncPlay does the same).
+        serviceCollection.AddSingleton<GroupTracker>(services =>
+        {
+            var tracker = new GroupTracker();
+            services.GetRequiredService<ISessionManager>().SessionEnded +=
+                (_, e) => tracker.Left(e.SessionInfo.UserId, e.SessionInfo.DeviceId);
+            return tracker;
+        });
+
+        serviceCollection.AddScoped<GuestGuard>();
+        serviceCollection.Configure<MvcOptions>(options => options.Filters.AddService<GuestGuard>());
     }
 }

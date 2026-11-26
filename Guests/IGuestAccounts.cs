@@ -63,6 +63,14 @@ public interface IGuestAccounts
     /// <summary>Every user who signs in through the guest provider (<see cref="GuestAuthenticationProvider"/>).</summary>
     /// <returns>Their ids.</returns>
     IReadOnlyList<Guid> GuestUserIds();
+
+    /// <summary>
+    /// Item <paramref name="itemId"/> and what a player asks for alongside it: an episode's season
+    /// and series, a season's series. What a room queues is let through with these.
+    /// </summary>
+    /// <param name="itemId">A queued item.</param>
+    /// <returns>The item, then its family.</returns>
+    IReadOnlyList<Guid> Family(Guid itemId);
 }
 
 /// <summary>What the rules need to know about a user.</summary>

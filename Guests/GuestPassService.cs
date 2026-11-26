@@ -344,6 +344,23 @@ public sealed class GuestPassService
         return new RedeemedPass(created.AccessToken, created.UserId, created.UserName, created.ServerId, pass.GroupId, endsAt);
     }
 
+    /// <summary>
+    /// Whether <paramref name="userId"/> is a guest of any pass the companion knows, live or
+    /// ended (the guard confines them all; an ended one's account is gone anyway).
+    /// </summary>
+    /// <param name="userId">A user.</param>
+    /// <returns>True for a guest.</returns>
+    public bool IsGuest(Guid userId) => _store.Read(passes => passes.Any(p => p.GuestUserId == userId));
+
+    /// <summary>The live pass of guest <paramref name="userId"/>, or null.</summary>
+    /// <param name="userId">A guest.</param>
+    /// <returns>A copy of their pass.</returns>
+    public GuestPass? LivePassOf(Guid userId)
+    {
+        var now = Now;
+        return _store.Read(passes => passes.Where(p => p.GuestUserId == userId && IsLive(p, now)).Select(Copy).FirstOrDefault());
+    }
+
     /// <summary>The pass of guest <paramref name="userId"/>, or null if they aren't a guest with a live pass.</summary>
     /// <param name="userId">The user asking.</param>
     /// <returns>Their pass: its room's group, who invited them, when it ends.</returns>

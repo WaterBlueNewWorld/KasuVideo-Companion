@@ -135,8 +135,37 @@ Franciskid (GPL-3.0) makes temporary guest users from links too. The ideas of a 
 visitor with a provider that refuses passwords, `AuthenticateDirect`, and hashed codes come
 from it; none of its code is used. Guest passes differ by being bound to a KasuVideo room.
 
-Coming next (KasuVideo's plan): confining what a guest's token can call on the server, to their
-room's group and what it plays.
+### What a guest may call
+
+A guest's token works in any app, so the companion confines it on the server: every API call
+passes through its guard (`Guests/GuestGuard.cs`, an MVC action filter), and for a guest only
+an allow-list gets through (`Guests/GuestAccessRules.cs`). Everything else answers `403 {
+"Error": "guest-not-allowed" }` (or `guest-item`, `guest-group`).
+
+- **Their own session:** `/Users/Me` and their own user, public system info, branding, the
+  server's time (Watch together measures its clock), reading display preferences, localization,
+  reporting capabilities and playback, the bitrate test, fallback fonts, stopping an encode,
+  signing out.
+- **Their room's Watch together group:** joining it, asking about it, leaving it, ready,
+  buffering, ping. The group list shows only it. Which groups count: the one the invite was made
+  in, and any group the inviter is in right now (so the pass follows the room when its group is
+  started again). Starting a group and every control (pause, seek, queue, next, stop…) are
+  refused: a guest never holds the remote.
+- **What their room plays:** an item, its playback info, its streams (direct, HLS playlists and
+  segments), subtitles, attachments, trickplay and media segments, only for items queued in
+  those groups, plus an episode's season and series. Items by id (`/Items?ids=…`) only when
+  every one was queued. Pictures are public in Jellyfin anyway.
+- **The companion:** `Info`, `RoomSettings` and `Guests/Me`. Other plugins' routes are refused.
+- **Refused, among the rest:** browsing (libraries, `/Items` without ids, search, Latest,
+  Resume, Next up, episodes lists), other users, sessions, favourites, played state, downloads,
+  writing preferences, Quick Connect, settings, the companion's other routes.
+
+Jellyfin doesn't tell a plugin what a group queues or who is in it, so the same guard notes it
+from everyone's SyncPlay requests (`Guests/GroupTracker.cs`): making, joining and leaving a
+group, a session's end, `SetNewQueue` and `Queue`. Kept in memory: groups end with the server.
+A group made by a client that queues something without those requests (a stock client starting
+a group while already playing) isn't known, so its items stay closed to guests. The server's
+WebSocket and raw endpoints aren't controller actions and don't pass through the guard.
 
 ## Installing
 
@@ -188,7 +217,8 @@ dotnet test tests/Jellyfin.Plugin.KasuVideoCompanion.Tests
 ```
 
 The tests (xUnit) run without a Jellyfin server: guest passes' rules, store, codes, names and
-policy, the settings' ranges, and the visitors' rate limit. A fake stands in for Jellyfin
+policy, the settings' ranges, the visitors' rate limit, the guard's allow-list and the group
+tracker. A fake stands in for Jellyfin
 (`IGuestAccounts`, which `JellyfinGuestAccounts` implements for real), so what touches Jellyfin
 itself is checked on a server: see [Where it was checked](#where-it-was-checked). The test
 project lives in `tests/` and is never part of the plugin (the plugin's project leaves `tests/`
@@ -203,7 +233,7 @@ out). CI runs it on every push to `main`.
 | `Api/SettingsController.cs` | Settings and RoomSettings. |
 | `Api/GuestsController.cs` | Guest passes' routes. |
 | `Configuration/` | The settings (`PluginConfiguration`) and their ranges (`SettingsBounds`). |
-| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the cleanup task and the visitors' rate limit. |
+| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the cleanup task, the visitors' rate limit, and the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`). |
 | `tests/` | The tests ([Testing](#testing)). |
 | `Jellyfin.Plugin.KasuVideoCompanion.csproj` | The project; its `<Version>` is the plugin's version. |
 | `build.yaml` | What jprm (Jellyfin's plugin repository tool) needs to package it: name, id, version, `targetAbi`, the catalog's texts and this version's changelog. |
@@ -235,6 +265,15 @@ out). CI runs it on every push to `main`.
   working, the account is gone, they're out of the group); turning passes off ending them; the
   administrators' list; the scheduled task; the visitors' rate limit. On 12.1.0 also a guest
   account whose record was lost, deleted by the cleanup at the next startup.
+- **The guard** (2026-11-25), on 10.11.11 and on a throwaway 12.1.0 with its library scanned,
+  73 checks each: a guest's own session and the server allowed; browsing, other users, sessions,
+  search, writes, settings and other routes refused; the room's queued film (details, legacy
+  route, by id, playback info, direct stream, an HLS transcode with the token in the query:
+  playlists and a segment) allowed, another film's refused, each way; only their room in the
+  group list; another group refused, theirs joined; starting a group and every control refused,
+  ready allowed; a film queued later let through; a queued episode lets its season and series
+  through, not another series; another group's queue stays refused; the owner's new group open
+  to the guest; everyone else unaffected; an ended pass's token opens nothing.
 
 ## Security
 

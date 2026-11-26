@@ -71,6 +71,12 @@ public sealed class FakeAccounts : IGuestAccounts
     public DateTime? LastActivity(Guid guestUserId) => Activity.TryGetValue(guestUserId, out var at) ? at : null;
 
     public IReadOnlyList<Guid> GuestUserIds() => Users.Values.Where(u => u.IsGuest).Select(u => u.Id).ToList();
+
+    /// <summary>Items' seasons and series, as the test sets them.</summary>
+    public Dictionary<Guid, Guid[]> Families { get; } = [];
+
+    public IReadOnlyList<Guid> Family(Guid itemId) =>
+        [itemId, .. Families.GetValueOrDefault(itemId) ?? []];
 }
 
 /// <summary>A service over fakes, in a temporary folder, with an inviter in a group and two libraries.</summary>

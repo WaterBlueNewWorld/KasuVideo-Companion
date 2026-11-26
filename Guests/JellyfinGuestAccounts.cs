@@ -4,6 +4,7 @@
 using Jellyfin.Data.Queries;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Devices;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.SyncPlay;
@@ -159,6 +160,24 @@ public sealed class JellyfinGuestAccounts : IGuestAccounts
         }
 
         return last;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Guid> Family(Guid itemId)
+    {
+        var family = new List<Guid> { itemId };
+        switch (itemId == Guid.Empty ? null : _libraries.GetItemById(itemId))
+        {
+            case Episode episode:
+                family.Add(episode.SeasonId);
+                family.Add(episode.SeriesId);
+                break;
+            case Season season:
+                family.Add(season.SeriesId);
+                break;
+        }
+
+        return family.Where(id => id != Guid.Empty).Distinct().ToList();
     }
 
     /// <inheritdoc />
