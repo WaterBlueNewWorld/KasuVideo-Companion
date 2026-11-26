@@ -3,7 +3,8 @@
   <!--
     The KasuVideo companion: a Jellyfin plugin that tells KasuVideo what other plugins add to it
     (their manifests, for every signed-in user) and, for administrators, which of Jellyfin's
-    interfaces each plugin implements. Built for Jellyfin 10.11 (.NET 9); see README.md.
+    interfaces each plugin implements; keeps Watch together's settings; and runs guest passes.
+    Built for Jellyfin 10.11 (.NET 9); see README.md.
   -->
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -24,6 +25,12 @@
     <!-- The server provides these at runtime: compile against them, never ship them. -->
     <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
     <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests are their own project (tests/), never part of the plugin. -->
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
   </ItemGroup>
 
 </Project>

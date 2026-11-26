@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The companion's tests (xUnit): the guest passes' rules, store, codes, names and policy, and
+    the settings' bounds, run without a Jellyfin server (a fake stands in for IGuestAccounts).
+    `dotnet test tests/Jellyfin.Plugin.KasuVideoCompanion.Tests` at the repository's root.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.11.0</JellyfinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- The plugin compiles against these without shipping them; the tests need them to run. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Jellyfin.Plugin.KasuVideoCompanion.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

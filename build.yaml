@@ -11,7 +11,7 @@ version: "0.1.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "WaterBlueNewWorld"
-overview: "Lets KasuVideo show what your other plugins add to it, for every user"
+overview: "KasuVideo's side of the server: plugins' additions, Watch together settings, guest passes"
 description: >
   Made for KasuVideo, a web frontend for Jellyfin. Plugins can add entries to
   KasuVideo's item menus and pages to its Dashboard by publishing a manifest (a
@@ -20,8 +20,11 @@ description: >
   signed-in KasuVideo user does. It also tells KasuVideo's administrators what each
   plugin does for the server: the Jellyfin interfaces its classes implement
   (metadata and picture providers, scheduled tasks, services...) and the API routes
-  it adds. It has no settings, no pages and no effect on Jellyfin's own web client,
-  and changes nothing on the server. Free software under the GNU AGPL v3 (source:
+  it adds. From 0.2.0 it keeps the settings of KasuVideo's Watch together rooms and
+  runs guest passes: a room's owner invites someone with no account on the server,
+  who gets a short-lived, confined account, deleted when the pass ends. Guest passes
+  are off until an administrator turns them on, from KasuVideo; the plugin has no
+  page in Jellyfin's dashboard. Free software under the GNU AGPL v3 (source:
   https://github.com/WaterBlueNewWorld/KasuVideo-Companion).
 category: "General"
 image: "image.png"

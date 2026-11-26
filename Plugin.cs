@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 WaterBlueNewWorld
 
+using Jellyfin.Plugin.KasuVideoCompanion.Configuration;
+using Jellyfin.Plugin.KasuVideoCompanion.Guests;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.KasuVideoCompanion;
 
 /// <summary>
-/// The KasuVideo companion. It has no settings and no pages: it only answers KasuVideo's
-/// questions about the other plugins (<see cref="Api.CompanionController"/>).
+/// The KasuVideo companion. It answers KasuVideo's questions about the other plugins
+/// (<see cref="Api.CompanionController"/>), keeps the settings for Watch together rooms and guest
+/// passes (<see cref="PluginConfiguration"/>, changed from KasuVideo's own page for the
+/// companion), and makes, confines and deletes guests' accounts (<see cref="GuestPassService"/>).
+/// It has no page in Jellyfin's own dashboard.
 /// </summary>
-public class Plugin : BasePlugin<BasePluginConfiguration>
+public class Plugin : BasePlugin<PluginConfiguration>
 {
     /// <summary>Stable plugin id. Never change it: Jellyfin keys installs and settings by it.</summary>
     public static readonly Guid PluginId = Guid.Parse("03029e1f-b932-4b53-b101-aa9fd84158a3");
@@ -23,7 +27,11 @@ public class Plugin : BasePlugin<BasePluginConfiguration>
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {
+        Instance = this;
     }
+
+    /// <summary>Gets the plugin Jellyfin loaded (its settings and data folder).</summary>
+    public static Plugin? Instance { get; private set; }
 
     /// <inheritdoc />
     public override string Name => "KasuVideo Companion";
@@ -33,5 +41,15 @@ public class Plugin : BasePlugin<BasePluginConfiguration>
 
     /// <inheritdoc />
     public override string Description =>
-        "Tells KasuVideo what other plugins add to it, and its administrators what each plugin implements.";
+        "KasuVideo's side of the server: what other plugins add to KasuVideo, Watch together's settings, and guest passes.";
+
+    /// <summary>
+    /// Uninstalling ends every guest pass, which deletes every guest's account: without the
+    /// companion nothing would confine their tokens.
+    /// </summary>
+    public override void OnUninstalling()
+    {
+        GuestPassService.Current?.EndAllAsync(EndReasons.Uninstalled).GetAwaiter().GetResult();
+        base.OnUninstalling();
+    }
 }

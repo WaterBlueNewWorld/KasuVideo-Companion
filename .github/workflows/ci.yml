@@ -1,7 +1,8 @@
 name: CI
 
-# Checks the version is the same everywhere (scripts/check-version.sh) and that the plugin
-# builds. Runs on pushes to main, and first in every release (release.yml).
+# Checks the version is the same everywhere (scripts/check-version.sh), that the plugin
+# builds, and that its tests pass. Runs on pushes to main, and first in every release
+# (release.yml).
 
 on:
   push:
@@ -28,3 +29,6 @@ jobs:
 
       - name: Build
         run: dotnet build -c Release -warnaserror
+
+      - name: Tests
+        run: dotnet test tests/Jellyfin.Plugin.KasuVideoCompanion.Tests -c Release

@@ -49,8 +49,14 @@ public class CompanionController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// What this companion can do besides the manifests, by name, so KasuVideo offers only what
+    /// the installed version has: its settings and room settings, and guest passes.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Capabilities = ["manifests", "implementations", "settings", "roomSettings", "guestPasses"];
+
     /// <summary>The companion's version and contract, so KasuVideo knows it is there.</summary>
-    /// <returns>Its name, version, the contract it speaks and where its source is.</returns>
+    /// <returns>Its name, version, the contract it speaks, where its source is, and what it can do.</returns>
     [HttpGet("Info")]
     [Authorize]
     public ActionResult<CompanionInfo> Info() =>
@@ -58,7 +64,8 @@ public class CompanionController : ControllerBase
             "KasuVideo Companion",
             typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0.0.0.0",
             Contract,
-            SourceUrl);
+            SourceUrl,
+            Capabilities);
 
     /// <summary>
     /// The manifests of the active plugins, for any signed-in user: each plugin page named
@@ -313,7 +320,8 @@ public class CompanionController : ControllerBase
 /// <param name="Version">Its version.</param>
 /// <param name="Contract">The manifest contract it speaks.</param>
 /// <param name="Source">Where its source code is (<see cref="CompanionController.SourceUrl"/>).</param>
-public record CompanionInfo(string Name, string Version, int Contract, string Source);
+/// <param name="Capabilities">What it can do (<see cref="CompanionController.Capabilities"/>); missing before 0.2.0.</param>
+public record CompanionInfo(string Name, string Version, int Contract, string Source, IReadOnlyList<string> Capabilities);
 
 /// <summary>What <c>GET /KasuVideo/Companion/Manifests</c> answers.</summary>
 /// <param name="Manifests">The manifests found.</param>
