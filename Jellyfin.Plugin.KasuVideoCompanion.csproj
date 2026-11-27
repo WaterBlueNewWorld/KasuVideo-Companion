@@ -12,7 +12,7 @@
     <AssemblyName>Jellyfin.Plugin.KasuVideoCompanion</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.1.1.0</Version>
+    <Version>0.2.0.0</Version>
     <Authors>WaterBlueNewWorld</Authors>
     <Copyright>Copyright (C) 2026 WaterBlueNewWorld</Copyright>
     <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>

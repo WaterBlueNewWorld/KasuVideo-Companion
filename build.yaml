@@ -6,7 +6,7 @@
 # rewrite it for every release. Releasing: .github/workflows/release.yml.
 name: "KasuVideo Companion"
 guid: "03029e1f-b932-4b53-b101-aa9fd84158a3"
-version: "0.1.1.0"
+version: "0.2.0.0"
 # Jellyfin 10.11 and newer (checked on 10.11.11 and 12.1.0).
 targetAbi: "10.11.0.0"
 framework: "net9.0"
@@ -31,5 +31,9 @@ image: "image.png"
 artifacts:
   - "Jellyfin.Plugin.KasuVideoCompanion.dll"
 changelog: >
-  0.1.1: the README now discloses the AI tools used to make the companion. The
-  plugin itself is unchanged from 0.1.0.
+  0.2.0: settings for KasuVideo's Watch together rooms, and guest passes (off until
+  an administrator turns them on from KasuVideo): a room's owner invites someone
+  with no account on the server, who gets a short-lived account confined to that
+  room by a guard on every API call. A pass ends at its time, when its guest leaves
+  or goes idle, when someone ends it, or when the server stops, and the rooms
+  server hears of it at once. Attacked on purpose before release; see the README.

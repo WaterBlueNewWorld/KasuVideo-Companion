@@ -6,6 +6,8 @@ GitHub release notes; Jellyfin's plugin catalog shows `changelog` in `build.yaml
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
 ### Added
 - **Settings** for KasuVideo's Watch together rooms and guest passes, changed by administrators
   from KasuVideo's own page for the companion: `GET`/`POST /KasuVideo/Companion/Settings`, with
