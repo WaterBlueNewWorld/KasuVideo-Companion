@@ -2,13 +2,21 @@
     {
         "guid": "03029e1f-b932-4b53-b101-aa9fd84158a3",
         "name": "KasuVideo Companion",
-        "description": "Made for KasuVideo, a web frontend for Jellyfin. Plugins can add entries to KasuVideo's item menus and pages to its Dashboard by publishing a manifest (a *.kasuvideo.json page). Jellyfin lists plugin pages to administrators only, so without this plugin only administrators see those additions; with it, every signed-in KasuVideo user does. It also tells KasuVideo's administrators what each plugin does for the server: the Jellyfin interfaces its classes implement (metadata and picture providers, scheduled tasks, services...) and the API routes it adds. It has no settings, no pages and no effect on Jellyfin's own web client, and changes nothing on the server. Free software under the GNU AGPL v3 (source: https://github.com/WaterBlueNewWorld/KasuVideo-Companion).\n",
-        "overview": "Lets KasuVideo show what your other plugins add to it, for every user",
+        "description": "Made for KasuVideo, a web frontend for Jellyfin. Plugins can add entries to KasuVideo's item menus and pages to its Dashboard by publishing a manifest (a *.kasuvideo.json page). Jellyfin lists plugin pages to administrators only, so without this plugin only administrators see those additions; with it, every signed-in KasuVideo user does. It also tells KasuVideo's administrators what each plugin does for the server: the Jellyfin interfaces its classes implement (metadata and picture providers, scheduled tasks, services...) and the API routes it adds. From 0.2.0 it keeps the settings of KasuVideo's Watch together rooms and runs guest passes: a room's owner invites someone with no account on the server, who gets a short-lived, confined account, deleted when the pass ends. Guest passes are off until an administrator turns them on, from KasuVideo; the plugin has no page in Jellyfin's dashboard. Free software under the GNU AGPL v3 (source: https://github.com/WaterBlueNewWorld/KasuVideo-Companion).\n",
+        "overview": "KasuVideo's side of the server: plugins' additions, Watch together settings, guest passes",
         "owner": "WaterBlueNewWorld",
         "category": "General",
         "image": "image.png",
         "imageUrl": "https://waterbluenewworld.github.io/KasuVideo-Companion/kasuvideo-companion/image.png",
         "versions": [
+            {
+                "version": "0.2.0.0",
+                "changelog": "0.2.0: settings for KasuVideo's Watch together rooms, and guest passes (off until an administrator turns them on from KasuVideo): a room's owner invites someone with no account on the server, who gets a short-lived account confined to that room by a guard on every API call. A pass ends at its time, when its guest leaves or goes idle, when someone ends it, or when the server stops, and the rooms server hears of it at once. Attacked on purpose before release; see the README.\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/WaterBlueNewWorld/KasuVideo-Companion/releases/download/v0.2.0/kasuvideo-companion_0.2.0.0.zip",
+                "checksum": "3eed5cb3e85c8f3e772c5fba24beee4d",
+                "timestamp": "2026-11-27T04:48:07Z"
+            },
             {
                 "version": "0.1.1.0",
                 "changelog": "0.1.1: the README now discloses the AI tools used to make the companion. The plugin itself is unchanged from 0.1.0.\n",
