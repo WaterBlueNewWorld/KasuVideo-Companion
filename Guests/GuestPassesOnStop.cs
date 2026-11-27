@@ -19,15 +19,21 @@ namespace Jellyfin.Plugin.KasuVideoCompanion.Guests;
 /// </summary>
 public sealed class GuestPassesOnStop : IHostedService
 {
+    /// <summary>How long the stop waits for the rooms server to hear of the passes' ends.</summary>
+    public static readonly TimeSpan NoticesWait = TimeSpan.FromSeconds(5);
+
     private readonly GuestPassService _passes;
+    private readonly IEndNotices _notices;
     private readonly ILogger<GuestPassesOnStop> _logger;
 
     /// <summary>Creates it (Jellyfin does).</summary>
     /// <param name="passes">Guest passes.</param>
+    /// <param name="notices">The notices to the rooms server, waited for before the server goes.</param>
     /// <param name="logger">Where it says how many ended.</param>
-    public GuestPassesOnStop(GuestPassService passes, ILogger<GuestPassesOnStop> logger)
+    public GuestPassesOnStop(GuestPassService passes, IEndNotices notices, ILogger<GuestPassesOnStop> logger)
     {
         _passes = passes;
+        _notices = notices;
         _logger = logger;
     }
 
@@ -42,5 +48,8 @@ public sealed class GuestPassesOnStop : IHostedService
         {
             _logger.LogInformation("The server is stopping: {Count} guest passes ended", ended);
         }
+
+        // So the rooms let those guests go now, not when their tickets run out.
+        await _notices.FlushAsync(NoticesWait).ConfigureAwait(false);
     }
 }

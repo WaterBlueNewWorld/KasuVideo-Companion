@@ -124,6 +124,42 @@ public sealed class FakeAccounts : IGuestAccounts
     public void IgnoreWait(Guid userId, string? deviceId) => IgnoredWaits.Add((userId, deviceId));
 }
 
+/// <summary>Notices to the rooms server, noted instead of sent.</summary>
+public sealed class FakeNotices : IEndNotices
+{
+    public FakeNotices(FakeAccounts accounts)
+    {
+        _accounts = accounts;
+    }
+
+    private readonly FakeAccounts _accounts;
+
+    /// <summary>Each prepared notice, and whether the guest's account had already ended then.</summary>
+    public List<(Guid Guest, string Group, bool AccountEnded)> Prepared { get; } = [];
+
+    /// <summary>Each notice sent, with its pass.</summary>
+    public List<(Guid Pass, GuestEndedNotice Notice)> Sent { get; } = [];
+
+    /// <summary>Each wait for the notices on their way.</summary>
+    public List<TimeSpan> Flushed { get; } = [];
+
+    public GuestEndedNotice Prepare(Guid guestUserId, string passGroupId)
+    {
+        Prepared.Add((guestUserId, passGroupId, _accounts.Ended.Contains(guestUserId)));
+        return new GuestEndedNotice(guestUserId, [passGroupId]);
+    }
+
+    public void Send(Guid passId, GuestEndedNotice notice) => Sent.Add((passId, notice));
+
+    public Task FlushAsync(TimeSpan limit)
+    {
+        Flushed.Add(limit);
+        return Task.CompletedTask;
+    }
+
+    public Task<string> CheckAsync(string? url, CancellationToken cancellationToken) => Task.FromResult(NoticeResults.Ok);
+}
+
 /// <summary>A service over fakes, in a temporary folder, with an inviter in a group and two libraries.</summary>
 public sealed class Setup : IDisposable
 {
@@ -141,7 +177,8 @@ public sealed class Setup : IDisposable
         Settings.InviterIds = [Owner];
         Settings.GuestLibraryIds = [Movies, Shows];
         Store = new GuestPassStore(Folder);
-        Service = new GuestPassService(Store, Accounts, () => Settings, Clock, NullLogger<GuestPassService>.Instance);
+        Notices = new FakeNotices(Accounts);
+        Service = new GuestPassService(Store, Accounts, () => Settings, Clock, NullLogger<GuestPassService>.Instance, Notices);
     }
 
     public static Guid Owner { get; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -165,6 +202,8 @@ public sealed class Setup : IDisposable
     public PluginConfiguration Settings { get; } = new();
 
     public GuestPassStore Store { get; }
+
+    public FakeNotices Notices { get; }
 
     public GuestPassService Service { get; }
 

@@ -48,4 +48,11 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Gets or sets the most guests one room takes at once.</summary>
     public int RoomMaxGuests { get; set; } = 4;
+
+    /// <summary>
+    /// Gets or sets the rooms server's address (<c>https://example.org/rooms</c>), where the
+    /// companion says a guest's pass ended so their room lets them go at once. Empty: nothing is
+    /// sent, and a room lets a guest go when their ticket runs out (ten minutes at most).
+    /// </summary>
+    public string RoomsServerUrl { get; set; } = string.Empty;
 }

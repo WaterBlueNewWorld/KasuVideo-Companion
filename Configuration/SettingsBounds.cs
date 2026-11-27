@@ -23,6 +23,31 @@ public static class SettingsBounds
             [nameof(PluginConfiguration.RoomMaxGuests)] = (0, 49),
         };
 
+    /// <summary>The longest rooms server address.</summary>
+    public const int MaxUrlLength = 512;
+
+    /// <summary>
+    /// Whether <paramref name="url"/> may be the rooms server's address: empty (none), or an
+    /// absolute http or https address with no query, fragment or user info.
+    /// </summary>
+    /// <param name="url">The address.</param>
+    /// <returns>True when it may.</returns>
+    public static bool ValidRoomsServerUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+        {
+            return true;
+        }
+
+        return url.Length <= MaxUrlLength
+            && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && uri.Query.Length == 0
+            && uri.Fragment.Length == 0
+            && uri.UserInfo.Length == 0
+            && !string.IsNullOrEmpty(uri.Host);
+    }
+
     /// <summary>
     /// What's wrong with <paramref name="settings"/>, by setting name (empty when nothing is): a
     /// number out of its range, the longest pass shorter than the shortest, more guests than a
@@ -62,6 +87,11 @@ public static class SettingsBounds
         if (settings.GuestLibraryIds.Distinct().Count() != settings.GuestLibraryIds.Length)
         {
             problems[nameof(PluginConfiguration.GuestLibraryIds)] = "lists a library twice";
+        }
+
+        if (!ValidRoomsServerUrl(settings.RoomsServerUrl))
+        {
+            problems[nameof(PluginConfiguration.RoomsServerUrl)] = "must be an http or https address";
         }
 
         return problems;

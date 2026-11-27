@@ -221,7 +221,7 @@ public class PassEndsTests : IDisposable
     {
         var pass = _s.Redeem(_s.Invite());
         _s.Invite();
-        var onStop = new GuestPassesOnStop(_s.Service, NullLogger<GuestPassesOnStop>.Instance);
+        var onStop = new GuestPassesOnStop(_s.Service, _s.Notices, NullLogger<GuestPassesOnStop>.Instance);
         await onStop.StartAsync(CancellationToken.None);
         Assert.Empty(_s.Accounts.Ended);
         await onStop.StopAsync(CancellationToken.None);

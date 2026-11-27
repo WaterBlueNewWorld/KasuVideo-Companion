@@ -42,7 +42,7 @@ All under the server's base URL (for example `/jellyfin`, if the server has that
 
 | Route | Who | What |
 | --- | --- | --- |
-| `GET /KasuVideo/Companion/Info` | Any signed-in user | `{ "Name", "Version", "Contract": 1, "Source", "Capabilities" }`. KasuVideo asks it first: a 404 means no companion. `Source` is where this version's source code is (see [License](#license)). `Capabilities` (from 0.2.0) names what this version can do: `manifests`, `implementations`, `settings`, `roomSettings`, `guestPasses`. |
+| `GET /KasuVideo/Companion/Info` | Any signed-in user | `{ "Name", "Version", "Contract": 1, "Source", "Capabilities" }`. KasuVideo asks it first: a 404 means no companion. `Source` is where this version's source code is (see [License](#license)). `Capabilities` (from 0.2.0) names what this version can do: `manifests`, `implementations`, `settings`, `roomSettings`, `guestPasses`, `endNotices`. |
 | `GET /KasuVideo/Companion/Manifests` | Any signed-in user | `{ "Manifests": [{ "PluginId", "PluginName", "PluginVersion", "Page", "Manifest" }] }`: the manifest of every **active** plugin, read from the plugin's own resources. A page that isn't JSON is left out and logged (without its content). |
 | `GET /KasuVideo/Companion/Implementations` | Administrators (`RequiresElevation`) | `{ "Plugins": [{ "Id", "Name", "Version", "Status", "Interfaces": [{ "Interface", "Name", "Types" }], "Routes" }] }`: for every plugin, the Jellyfin interfaces its public types implement and the API routes its controllers add. |
 
@@ -69,6 +69,8 @@ From 0.2.0, the settings and guest passes:
 | `GET /KasuVideo/Companion/Settings` | Administrators | Every setting ([Settings](#settings)), with `Bounds`: the range each number may take. |
 | `POST /KasuVideo/Companion/Settings` | Administrators | Saves every setting at once; `400 { "Problems": { name: message } }` when one is out of range. Turning guest passes off ends every pass. |
 | `GET /KasuVideo/Companion/RoomSettings` | Any signed-in user | `{ "MaxMembers", "MaxGuests" }`: how many people and guests a Watch together room takes. KasuVideo's rooms Worker reads it with the joining user's own header. |
+| `GET /KasuVideo/Companion/NoticeKey` | Anyone | `{ "Key" }`: the public key the companion's notices to the rooms server are signed with (base64 DER, ECDSA P-256), which the rooms Worker reads without a token ([Notices to the rooms server](#notices-to-the-rooms-server)). Only the public half. |
+| `POST /KasuVideo/Companion/RoomsServer/Check` | Administrators | `{ "Url" }` (or nothing, for the saved address): sends the rooms server a signed test notice and answers `{ "Result" }`: `ok`, `not-set`, `unreachable` or `refused`; `400 { "Problems" }` for an address that can't be one. |
 | `GET /KasuVideo/Guests/Status` | Any signed-in user | Whether guest passes are on, whether the caller may invite, the libraries they may give, their open passes and the allowed lengths. |
 | `GET /KasuVideo/Guests/Invites` | An inviter | Their open passes (links not yet opened, and guests), never with a code. |
 | `POST /KasuVideo/Guests/Invites` | An inviter | `{ "GroupId", "LibraryIds", "Hours" }`: a new invite for a Watch together group they're in. Answers the code, the only time it's given. |
@@ -102,6 +104,7 @@ Kept by Jellyfin in the plugin's settings file, changed from KasuVideo's page fo
 | `GuestBitrateMbps` | 8 | 1–200 | The most a guest may stream. |
 | `RoomMaxMembers` | 16 | 2–50 | The most people a Watch together room takes, its owner included. |
 | `RoomMaxGuests` | 4 | 0–49 | The most guests a room takes at once; at least one place is left for the owner. |
+| `RoomsServerUrl` | none | | The rooms server's address (`https://example.org/rooms`), told the moment a guest's pass ends ([Notices to the rooms server](#notices-to-the-rooms-server)): an `http` or `https` address, without a query, fragment or user name. A save that leaves it out (a KasuVideo from before it) keeps it; empty clears it. |
 
 ## Guest passes
 
@@ -134,8 +137,9 @@ on the server. The design is in KasuVideo's repository (`docs/GUEST_PASSES.md`).
    passes are turned off, or **the server stops** (a restart, an update, or the companion
    disabled, which takes effect at the restart: without the companion nothing would confine the
    guest's token). Ending signs out every device of the guest (their token stops working, and
-   they leave their Watch together group), then deletes the user. Uninstalling the companion
-   ends every pass.
+   they leave their Watch together group), deletes the user, and tells the rooms server, so the
+   guest leaves the room's chat and voice call at once ([Notices to the rooms
+   server](#notices-to-the-rooms-server)). Uninstalling the companion ends every pass.
 5. **Leftover accounts.** Two scheduled tasks, under KasuVideo, delete any guest account without
    a live pass (left by a crash, or a delete that failed, say a Leave over a dropped connection;
    or whose pass ran out):
@@ -157,6 +161,34 @@ every guest account is refused until the tasks delete it.
 Franciskid (GPL-3.0) makes temporary guest users from links too. The ideas of a hidden user per
 visitor with a provider that refuses passwords, `AuthenticateDirect`, and hashed codes come
 from it; none of its code is used. Guest passes differ by being bound to a KasuVideo room.
+
+### Notices to the rooms server
+
+When a pass ends, Jellyfin refuses the guest's token at once, but KasuVideo's rooms Worker, which
+runs the room's chat and voice call elsewhere, doesn't see it: without a word from the companion,
+the room lets the guest go only when their room ticket runs out (ten minutes at most). So the
+companion tells it (KasuVideo's G8b, at its owner's wish: "immediately if possible").
+
+- **Where:** `POST {RoomsServerUrl}/notices`. Nothing is sent while the setting is empty.
+- **What:** `{ "type": "guest-ended", "userId", "groups", "at" }`: the guest's account, the
+  pass's group and the groups the tracker saw them in (read before the account ends, whose
+  sign-out empties the tracker; ten at most), and the time in milliseconds.
+- **Signed:** with an ECDSA P-256 key the companion makes on first use and keeps in its folder
+  (`notice-key.pem`, readable by Jellyfin's user only), never in the plugin settings, which
+  Jellyfin hands to administrators. The signature (SHA-256; r then s, IEEE P1363, as WebCrypto
+  verifies) goes in `X-Kasu-Signature`, over the exact bytes sent. The Worker reads the public
+  half from `GET /KasuVideo/Companion/NoticeKey` on the one Jellyfin it trusts, so there's no
+  secret to copy between the two; it refuses a notice that doesn't verify, or whose `at` is more
+  than two minutes off. An unreadable key file is replaced by a new key, which the Worker fetches
+  when a notice fails to verify.
+- **When:** from the end of every pass that had a guest, in the background, so whatever ended it
+  never waits: tried three times (at once, after 1 and after 5 seconds, 5 seconds each), a
+  refusal not tried again. At the server's stop the notices are awaited, 5 seconds in all. One
+  that doesn't get through is logged with the pass's id only, and the room lets the guest go when
+  their ticket runs out, as before.
+- **Setting it up:** KasuVideo's page for the companion has the address, with "Use this
+  KasuVideo's" in a build with rooms, and **Check** (`POST RoomsServer/Check`), which sends a
+  signed `{ "type": "ping", "at" }` and says what came back.
 
 ### What a guest may call
 
@@ -267,11 +299,11 @@ out). CI runs it on every push to `main`.
 | File | What it is |
 | --- | --- |
 | `Plugin.cs`, `PluginServiceRegistrator.cs` | The plugin, and the services it adds to Jellyfin's. |
-| `Api/CompanionController.cs` | Info, Manifests and Implementations. |
-| `Api/SettingsController.cs` | Settings and RoomSettings. |
+| `Api/CompanionController.cs` | Info, Manifests, Implementations and NoticeKey. |
+| `Api/SettingsController.cs` | Settings, RoomSettings and the rooms server's check. |
 | `Api/GuestsController.cs` | Guest passes' routes. |
 | `Configuration/` | The settings (`PluginConfiguration`) and their ranges (`SettingsBounds`). |
-| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the two scheduled tasks (`GuestPassCleanupTask`, `LeftoverGuestAccountsTask`), the visitors' rate limit, the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`, `GroupRecorder`, `GuestStalls`), and the end of every pass when the server stops (`GuestPassesOnStop`). |
+| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the two scheduled tasks (`GuestPassCleanupTask`, `LeftoverGuestAccountsTask`), the visitors' rate limit, the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`, `GroupRecorder`, `GuestStalls`), the end of every pass when the server stops (`GuestPassesOnStop`), and the notices to the rooms server (`EndNotices`, signed with `NoticeKey`). |
 | `tests/` | The tests ([Testing](#testing)). |
 | `Jellyfin.Plugin.KasuVideoCompanion.csproj` | The project; its `<Version>` is the plugin's version. |
 | `build.yaml` | What jprm (Jellyfin's plugin repository tool) needs to package it: name, id, version, `targetAbi`, the catalog's texts and this version's changelog. |
@@ -322,11 +354,23 @@ out). CI runs it on every push to `main`.
   also saw Jellyfin 10.11 log, at each guest sign-in, that the guest provider isn't registered
   ("invalid/missing Authentication Provider", then Jellyfin's own invalid provider): passwords
   are refused either way.
+- **Notices to the rooms server** (2026-11-26, KasuVideo's G8b), on 10.11.11 with KasuVideo's
+  rooms Worker running locally, and on a throwaway 12.1.0 with a stand-in rooms server. On
+  10.11.11, a guest in a room was told their pass had ended within a second however it ended:
+  an administrator's or the inviter's End, passes turned off, the inviter taken off the list,
+  idle, the server stopping. Each time they were out of the voice call, and their ticket and token
+  were dead. Forged, stale and edited notices were refused, and the key answered without a sign-in.
+  The check was refused to anyone but an administrator; it said ok, unreachable or refused as it
+  should. With the Worker stopped, the pass still ended and the failed notice was logged with the
+  pass's id only. In Chrome, the guest's page said the pass had ended 0.3 s after an outside end.
+  On 12.1.0, the companion loaded, and a pass's end sent a notice within 0.1 s that verified
+  against the key it published.
 
 ## Security
 
-Everything needs a signed-in user, except an invite's preview and opening it, which anyone
-holding a link may call: on those two, wrong codes are limited to 10 a minute per address and 60
+Everything needs a signed-in user, except the notice key (public by design: the rooms Worker
+reads it without a token, and it's only the public half) and an invite's preview and opening it,
+which anyone holding a link may call: on those two, wrong codes are limited to 10 a minute per address and 60
 a minute in all (`429`, with `Retry-After`), and a real link always goes through; they answer
 the same `invalid` for every kind of bad link. Behind a reverse proxy, Jellyfin's
 `KnownProxies` must list it, or every visitor counts as the proxy's address. Manifests are written for clients
@@ -335,7 +379,9 @@ additions KasuVideo shows only to administrators. What a plugin implements, the 
 list of every pass are for administrators only. Never log a token, an invite code or a manifest's
 content; only a code's SHA-256 is kept. Anything a regular user may call needs `[Authorize]`;
 anything about the plugins themselves or the settings, `[Authorize(Policy =
-Policies.RequiresElevation)]`; the two anonymous routes, `[AllowAnonymous]`.
+Policies.RequiresElevation)]`; the three anonymous routes, `[AllowAnonymous]`. The notices'
+private key never leaves the companion's folder; the rooms server's check, which sends a request
+to an address it's given, is for administrators only.
 
 KasuVideo's penetration test of guest passes (its `docs/GUEST_PASSES.md`, "Penetration test
 (G8)") attacked all of this on 10.11.11 and 12.1.0; its findings are fixed here. Two things it

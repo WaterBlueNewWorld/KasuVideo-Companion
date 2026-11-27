@@ -29,6 +29,12 @@ GitHub release notes; Jellyfin's plugin catalog shows `changelog` in `build.yaml
   accounts without a live pass (a crash, a failed delete, a pass that ran out), besides the
   five-minute "Guest passes" task. An account is never reused for another pass, and neither task
   sweeps while a link is being opened.
+- **The rooms server hears at once when a pass ends**, so the guest leaves their room's chat
+  and voice call then, not when their room ticket runs out (ten minutes at most): a signed
+  notice to `POST {RoomsServerUrl}/notices`, from every end of a pass that had a guest (the
+  server's stop included). A new setting, `RoomsServerUrl`; the public key at `GET
+  /KasuVideo/Companion/NoticeKey` (anyone); `POST /KasuVideo/Companion/RoomsServer/Check`
+  (administrators) sends a test notice; the `endNotices` capability.
 - `Info` answers `Capabilities`, what this version can do.
 - Tests (xUnit, `tests/`), run by CI.
 

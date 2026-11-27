@@ -25,6 +25,7 @@ public sealed class GuestPassService
     private readonly Func<PluginConfiguration> _settings;
     private readonly TimeProvider _clock;
     private readonly ILogger<GuestPassService> _logger;
+    private readonly IEndNotices? _notices;
 
     /// <summary>Creates the service.</summary>
     /// <param name="store">Where the passes are kept.</param>
@@ -32,18 +33,21 @@ public sealed class GuestPassService
     /// <param name="settings">The current settings.</param>
     /// <param name="clock">The time.</param>
     /// <param name="logger">Where what happens is logged (never a code or a token).</param>
+    /// <param name="notices">Tells the rooms server when a guest's pass ends; none sends nothing.</param>
     public GuestPassService(
         GuestPassStore store,
         IGuestAccounts accounts,
         Func<PluginConfiguration> settings,
         TimeProvider clock,
-        ILogger<GuestPassService> logger)
+        ILogger<GuestPassService> logger,
+        IEndNotices? notices = null)
     {
         _store = store;
         _accounts = accounts;
         _settings = settings;
         _clock = clock;
         _logger = logger;
+        _notices = notices;
         Current = this;
     }
 
@@ -655,6 +659,8 @@ public sealed class GuestPassService
         });
         if (pass?.GuestUserId is { } user)
         {
+            // Read before the account ends: its sign-out empties the tracker.
+            var notice = _notices?.Prepare(user, pass.GroupId);
             try
             {
                 await _accounts.EndAsync(user).ConfigureAwait(false);
@@ -663,6 +669,12 @@ public sealed class GuestPassService
             {
                 // The account is left for the next cleanup's leftover sweep.
                 _logger.LogError(e, "Ending guest pass {Pass}'s account failed", passId);
+            }
+
+            // The room lets them go now, not when their ticket runs out.
+            if (notice is not null)
+            {
+                _notices!.Send(passId, notice);
             }
         }
 

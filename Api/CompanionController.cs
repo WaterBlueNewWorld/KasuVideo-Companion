@@ -4,6 +4,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
+using Jellyfin.Plugin.KasuVideoCompanion.Guests;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using Microsoft.AspNetCore.Authorization;
@@ -38,22 +39,26 @@ public class CompanionController : ControllerBase
     public const string SourceUrl = "https://github.com/WaterBlueNewWorld/KasuVideo-Companion";
 
     private readonly IPluginManager _plugins;
+    private readonly NoticeKey _noticeKey;
     private readonly ILogger<CompanionController> _logger;
 
     /// <summary>Creates the controller.</summary>
     /// <param name="plugins">The server's plugins.</param>
+    /// <param name="noticeKey">The key the companion's notices to the rooms server are signed with.</param>
     /// <param name="logger">Where problems with a plugin's manifest are logged.</param>
-    public CompanionController(IPluginManager plugins, ILogger<CompanionController> logger)
+    public CompanionController(IPluginManager plugins, NoticeKey noticeKey, ILogger<CompanionController> logger)
     {
         _plugins = plugins;
+        _noticeKey = noticeKey;
         _logger = logger;
     }
 
     /// <summary>
     /// What this companion can do besides the manifests, by name, so KasuVideo offers only what
-    /// the installed version has: its settings and room settings, and guest passes.
+    /// the installed version has: its settings and room settings, guest passes, and notices to the
+    /// rooms server when a pass ends (its address among the settings).
     /// </summary>
-    public static readonly IReadOnlyList<string> Capabilities = ["manifests", "implementations", "settings", "roomSettings", "guestPasses"];
+    public static readonly IReadOnlyList<string> Capabilities = ["manifests", "implementations", "settings", "roomSettings", "guestPasses", "endNotices"];
 
     /// <summary>The companion's version and contract, so KasuVideo knows it is there.</summary>
     /// <returns>Its name, version, the contract it speaks, where its source is, and what it can do.</returns>
@@ -66,6 +71,16 @@ public class CompanionController : ControllerBase
             Contract,
             SourceUrl,
             Capabilities);
+
+    /// <summary>
+    /// The public key the companion's notices to the rooms server are signed with, for anyone:
+    /// the rooms Worker reads it from the server it trusts, without a token, to check a notice
+    /// (README.md, "Notices to the rooms server"). Only the public half.
+    /// </summary>
+    /// <returns><c>{"Key": base64 DER}</c> (SubjectPublicKeyInfo, ECDSA P-256).</returns>
+    [HttpGet("NoticeKey")]
+    [AllowAnonymous]
+    public ActionResult<NoticeKeyInfo> GetNoticeKey() => new NoticeKeyInfo(_noticeKey.PublicKey);
 
     /// <summary>
     /// The manifests of the active plugins, for any signed-in user: each plugin page named
@@ -322,6 +337,10 @@ public class CompanionController : ControllerBase
 /// <param name="Source">Where its source code is (<see cref="CompanionController.SourceUrl"/>).</param>
 /// <param name="Capabilities">What it can do (<see cref="CompanionController.Capabilities"/>); missing before 0.2.0.</param>
 public record CompanionInfo(string Name, string Version, int Contract, string Source, IReadOnlyList<string> Capabilities);
+
+/// <summary>What <c>GET /KasuVideo/Companion/NoticeKey</c> answers.</summary>
+/// <param name="Key">The public key, base64 DER (SubjectPublicKeyInfo, ECDSA P-256).</param>
+public record NoticeKeyInfo(string Key);
 
 /// <summary>What <c>GET /KasuVideo/Companion/Manifests</c> answers.</summary>
 /// <param name="Manifests">The manifests found.</param>

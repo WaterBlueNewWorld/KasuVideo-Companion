@@ -19,14 +19,17 @@ namespace Jellyfin.Plugin.KasuVideoCompanion.Api;
 public class SettingsController : ControllerBase
 {
     private readonly GuestPassService _passes;
+    private readonly IEndNotices _notices;
     private readonly ILogger<SettingsController> _logger;
 
     /// <summary>Creates the controller.</summary>
     /// <param name="passes">Guest passes (turning them off ends them all).</param>
+    /// <param name="notices">The notices to the rooms server (for the check).</param>
     /// <param name="logger">Where changes are logged.</param>
-    public SettingsController(GuestPassService passes, ILogger<SettingsController> logger)
+    public SettingsController(GuestPassService passes, IEndNotices notices, ILogger<SettingsController> logger)
     {
         _passes = passes;
+        _notices = notices;
         _logger = logger;
     }
 
@@ -46,7 +49,7 @@ public class SettingsController : ControllerBase
     [Authorize(Policy = Policies.RequiresElevation)]
     public async Task<ActionResult<CompanionSettings>> SaveSettings([FromBody] SettingsInput input)
     {
-        var next = input.ToConfiguration();
+        var next = input.ToConfiguration(Plugin.Instance!.Configuration);
         var problems = SettingsBounds.Problems(next);
         if (problems.Count > 0)
         {
@@ -78,7 +81,37 @@ public class SettingsController : ControllerBase
     [HttpGet("RoomSettings")]
     [Authorize]
     public ActionResult<RoomSettings> GetRoomSettings() => _passes.Rooms();
+
+    /// <summary>
+    /// For administrators: sends the rooms server a signed ping, to see that notices get through
+    /// (README.md, "Notices to the rooms server"). Checks <c>Url</c> when given (before it's
+    /// saved), else the saved address.
+    /// </summary>
+    /// <param name="input">The address to check, or nothing.</param>
+    /// <param name="cancellationToken">Stops it.</param>
+    /// <returns><c>{"Result": "ok" | "not-set" | "unreachable" | "refused"}</c>, or <c>400</c> for an address that can't be one.</returns>
+    [HttpPost("RoomsServer/Check")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    public async Task<ActionResult<RoomsServerCheck>> CheckRoomsServer([FromBody] RoomsServerCheckInput? input, CancellationToken cancellationToken)
+    {
+        var url = input?.Url;
+        if (!SettingsBounds.ValidRoomsServerUrl(url))
+        {
+            return BadRequest(new { Problems = new Dictionary<string, string> { [nameof(PluginConfiguration.RoomsServerUrl)] = "must be an http or https address" } });
+        }
+
+        var result = await _notices.CheckAsync(string.IsNullOrEmpty(url) ? null : url, cancellationToken).ConfigureAwait(false);
+        return new RoomsServerCheck(result);
+    }
 }
+
+/// <summary>What <c>POST /KasuVideo/Companion/RoomsServer/Check</c> takes.</summary>
+/// <param name="Url">The address to check; null or empty for the saved one.</param>
+public sealed record RoomsServerCheckInput(string? Url);
+
+/// <summary>What <c>POST /KasuVideo/Companion/RoomsServer/Check</c> answers.</summary>
+/// <param name="Result">One of <see cref="NoticeResults"/>.</param>
+public sealed record RoomsServerCheck(string Result);
 
 /// <summary>What <c>GET /KasuVideo/Companion/Settings</c> answers.</summary>
 /// <param name="GuestPassesEnabled">Whether guest passes are on.</param>
@@ -93,6 +126,7 @@ public class SettingsController : ControllerBase
 /// <param name="GuestBitrateMbps">The most a guest may stream.</param>
 /// <param name="RoomMaxMembers">The most people a room takes.</param>
 /// <param name="RoomMaxGuests">The most guests a room takes.</param>
+/// <param name="RoomsServerUrl">Where the companion says a guest's pass ended; empty for nowhere.</param>
 /// <param name="Bounds">The range each number may take.</param>
 public sealed record CompanionSettings(
     bool GuestPassesEnabled,
@@ -107,6 +141,7 @@ public sealed record CompanionSettings(
     int GuestBitrateMbps,
     int RoomMaxMembers,
     int RoomMaxGuests,
+    string RoomsServerUrl,
     Dictionary<string, Bound> Bounds)
 {
     /// <summary>The answer for <paramref name="c"/>.</summary>
@@ -125,6 +160,7 @@ public sealed record CompanionSettings(
         c.GuestBitrateMbps,
         c.RoomMaxMembers,
         c.RoomMaxGuests,
+        c.RoomsServerUrl,
         SettingsBounds.Numbers.ToDictionary(p => p.Key, p => new Bound(p.Value.Min, p.Value.Max), StringComparer.Ordinal));
 }
 
@@ -172,9 +208,16 @@ public sealed class SettingsInput
     /// <summary>Gets or sets the most guests a room takes.</summary>
     public int RoomMaxGuests { get; set; }
 
+    /// <summary>
+    /// Gets or sets the rooms server's address; null (left out, as by a KasuVideo that doesn't know
+    /// it) keeps the saved one, empty clears it.
+    /// </summary>
+    public string? RoomsServerUrl { get; set; }
+
     /// <summary>The settings to save.</summary>
+    /// <param name="current">The settings saved now, for what this leaves out.</param>
     /// <returns>A new configuration with these values.</returns>
-    public PluginConfiguration ToConfiguration() => new()
+    public PluginConfiguration ToConfiguration(PluginConfiguration current) => new()
     {
         GuestPassesEnabled = GuestPassesEnabled,
         InviterIds = InviterIds ?? [],
@@ -188,5 +231,6 @@ public sealed class SettingsInput
         GuestBitrateMbps = GuestBitrateMbps,
         RoomMaxMembers = RoomMaxMembers,
         RoomMaxGuests = RoomMaxGuests,
+        RoomsServerUrl = (RoomsServerUrl ?? current.RoomsServerUrl).Trim(),
     };
 }

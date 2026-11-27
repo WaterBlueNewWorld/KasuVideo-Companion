@@ -2,6 +2,7 @@
 // Copyright (C) 2026 WaterBlueNewWorld
 
 using Jellyfin.Plugin.KasuVideoCompanion.Guests;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Session;
@@ -16,8 +17,10 @@ namespace Jellyfin.Plugin.KasuVideoCompanion;
 /// Adds the companion's services to Jellyfin's: guest passes (<see cref="GuestPassService"/>,
 /// its store, its Jellyfin side and the visitors' rate limit), what it knows of Watch together
 /// groups (<see cref="GroupTracker"/>, written by <see cref="GroupRecorder"/>), the guard every API
-/// call passes through (<see cref="GuestGuard"/>, with <see cref="GuestStalls"/>), and the end of
-/// every pass when the server stops (<see cref="GuestPassesOnStop"/>). Jellyfin finds this class in the plugin's assembly and calls it
+/// call passes through (<see cref="GuestGuard"/>, with <see cref="GuestStalls"/>), the notices that
+/// tell the rooms server a pass ended (<see cref="EndNotices"/>, signed with
+/// <see cref="NoticeKey"/>), and the end of every pass when the server stops
+/// (<see cref="GuestPassesOnStop"/>). Jellyfin finds this class in the plugin's assembly and calls it
 /// once at startup.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
@@ -27,12 +30,25 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<IGuestAccounts, JellyfinGuestAccounts>();
         serviceCollection.AddSingleton<VisitorLimiter>(_ => new VisitorLimiter(TimeProvider.System));
+
+        // A pass's end told to the rooms server at once, signed with the companion's own key.
+        serviceCollection.AddSingleton<NoticeKey>(services => new NoticeKey(
+            Plugin.Instance!.DataFolderPath,
+            services.GetRequiredService<ILogger<NoticeKey>>()));
+        serviceCollection.AddSingleton<IEndNotices>(services => new EndNotices(
+            services.GetRequiredService<NoticeKey>(),
+            services.GetRequiredService<GroupTracker>(),
+            () => Plugin.Instance!.Configuration,
+            () => services.GetRequiredService<IHttpClientFactory>().CreateClient(NamedClient.Default),
+            TimeProvider.System,
+            services.GetRequiredService<ILogger<EndNotices>>()));
         serviceCollection.AddSingleton<GuestPassService>(services => new GuestPassService(
             new GuestPassStore(Plugin.Instance!.DataFolderPath),
             services.GetRequiredService<IGuestAccounts>(),
             () => Plugin.Instance!.Configuration,
             TimeProvider.System,
-            services.GetRequiredService<ILogger<GuestPassService>>()));
+            services.GetRequiredService<ILogger<GuestPassService>>(),
+            services.GetRequiredService<IEndNotices>()));
 
         // A session that ends leaves its group (Jellyfin's SyncPlay does the same).
         serviceCollection.AddSingleton<GroupTracker>(services =>
