@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.KasuVideoCompanion;
@@ -14,8 +15,9 @@ namespace Jellyfin.Plugin.KasuVideoCompanion;
 /// <summary>
 /// Adds the companion's services to Jellyfin's: guest passes (<see cref="GuestPassService"/>,
 /// its store, its Jellyfin side and the visitors' rate limit), what it knows of Watch together
-/// groups (<see cref="GroupTracker"/>), and the guard every API call passes through
-/// (<see cref="GuestGuard"/>). Jellyfin finds this class in the plugin's assembly and calls it
+/// groups (<see cref="GroupTracker"/>, written by <see cref="GroupRecorder"/>), the guard every API
+/// call passes through (<see cref="GuestGuard"/>, with <see cref="GuestStalls"/>), and the end of
+/// every pass when the server stops (<see cref="GuestPassesOnStop"/>). Jellyfin finds this class in the plugin's assembly and calls it
 /// once at startup.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
@@ -41,7 +43,12 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             return tracker;
         });
 
+        serviceCollection.AddSingleton<GroupRecorder>();
+        serviceCollection.AddSingleton<GuestStalls>(_ => new GuestStalls(TimeProvider.System));
         serviceCollection.AddScoped<GuestGuard>();
         serviceCollection.Configure<MvcOptions>(options => options.Filters.AddService<GuestGuard>());
+
+        // Every pass ends when the server stops: without the companion nothing confines a guest.
+        serviceCollection.AddHostedService<GuestPassesOnStop>();
     }
 }

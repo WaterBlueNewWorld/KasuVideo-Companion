@@ -83,7 +83,8 @@ public class GuestsController : ControllerBase
 
     /// <summary>
     /// For anyone holding a link: who invited them and until when it works. <c>404 invalid</c>
-    /// for anything but a live, unopened link, without saying why. Limited per address.
+    /// for anything but a live, unopened link, without saying why. Wrong codes are limited per
+    /// address and in all (<c>429</c>, with <c>Retry-After</c>); a real link never is.
     /// </summary>
     /// <param name="input">The code.</param>
     /// <returns>The preview.</returns>
@@ -91,19 +92,14 @@ public class GuestsController : ControllerBase
     [AllowAnonymous]
     public ActionResult<InvitePreview> Preview([FromBody] CodeInput input)
     {
-        if (!_visitors.Allow(Address))
-        {
-            return Refuse("too-many-requests");
-        }
-
         var preview = _passes.Preview(input.Code);
-        return preview is null ? Refuse(GuestErrors.Invalid.Code) : preview;
+        return preview is null ? WrongCode() : preview;
     }
 
     /// <summary>
     /// For anyone holding a link: opens it, once. Makes the guest's account and answers its
     /// session (token, user, server), the group of the room they're invited to, and when the
-    /// pass ends. Limited per address.
+    /// pass ends. Wrong codes are limited as for the preview; a real link never is.
     /// </summary>
     /// <param name="input">The code, a nickname, and the visitor's device.</param>
     /// <returns>The guest's session, or why not.</returns>
@@ -111,9 +107,9 @@ public class GuestsController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<RedeemedPass>> Redeem([FromBody] RedeemInput input)
     {
-        if (!_visitors.Allow(Address))
+        if (!_passes.IsOpenCode(input.Code))
         {
-            return Refuse("too-many-requests");
+            return WrongCode();
         }
 
         var result = await _passes.RedeemAsync(input.Code, input.Nickname, input.DeviceId, input.DeviceName, input.AppVersion, Address)
@@ -154,6 +150,18 @@ public class GuestsController : ControllerBase
     public ActionResult<PassList> Passes() => new PassList(_passes.All());
 
     private string? Address => HttpContext.Connection.RemoteIpAddress?.ToString();
+
+    /// <summary>A code that isn't a live link's: <c>404 invalid</c>, or <c>429</c> once there were too many.</summary>
+    private ObjectResult WrongCode()
+    {
+        if (_visitors.Allow(Address))
+        {
+            return Refuse(GuestErrors.Invalid.Code);
+        }
+
+        Response.Headers.RetryAfter = VisitorLimiter.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Refuse("too-many-requests");
+    }
 
     private ObjectResult Refuse(string code) =>
         StatusCode(StatusOf(code), new { Error = code });

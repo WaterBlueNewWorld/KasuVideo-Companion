@@ -217,7 +217,26 @@ public sealed class GuestPassService
         }
 
         var inviter = _accounts.Describe(pass.InviterId);
-        return inviter is null ? null : new InvitePreview(inviter.Name, pass.RedeemBy, pass.Hours);
+        return MayInvite(_settings(), inviter) ? new InvitePreview(inviter!.Name, pass.RedeemBy, pass.Hours) : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="code"/> is a live, unopened link's (what opening it needs). The
+    /// visitors' limit counts only the codes that aren't (<see cref="VisitorLimiter"/>): a real
+    /// link always goes through, whatever a flood of wrong ones did.
+    /// </summary>
+    /// <param name="code">The code from the link.</param>
+    /// <returns>True for a link that can be opened now.</returns>
+    public bool IsOpenCode(string? code)
+    {
+        if (!_settings().GuestPassesEnabled || !GuestCodes.LooksLikeCode(code))
+        {
+            return false;
+        }
+
+        var hash = GuestCodes.Hash(code!);
+        var now = Now;
+        return _store.Read(passes => passes.Any(p => p.CodeHash == hash && p.State == GuestPassState.Pending && now < p.RedeemBy));
     }
 
     /// <summary>
@@ -251,7 +270,9 @@ public sealed class GuestPassService
             return GuestErrors.BadName;
         }
 
-        if (!ValidDeviceId(deviceId))
+        // A device another user holds is refused: Jellyfin keys sessions by device, so a guest on
+        // it would take over that user's session, and their pass's end would end it (G8).
+        if (!ValidDeviceId(deviceId) || _accounts.DeviceInUse(deviceId!))
         {
             return GuestErrors.BadDevice;
         }
@@ -259,7 +280,7 @@ public sealed class GuestPassService
         // Claim the link: only one visitor gets past here.
         var hash = GuestCodes.Hash(code!);
         var now = Now;
-        var pass = _store.Update(passes =>
+        var pass = _store.UpdateIfFound(passes =>
         {
             var found = passes.FirstOrDefault(p => p.CodeHash == hash);
             if (found is null || found.State != GuestPassState.Pending || now >= found.RedeemBy)
@@ -299,8 +320,8 @@ public sealed class GuestPassService
                         settings.GuestTranscoding,
                         settings.GuestBitrateMbps,
                         deviceId!,
-                        string.IsNullOrWhiteSpace(deviceName) ? "KasuVideo guest" : deviceName.Trim(),
-                        string.IsNullOrWhiteSpace(appVersion) ? "0" : appVersion.Trim(),
+                        GuestNames.Label(deviceName, "KasuVideo guest"),
+                        GuestNames.Label(appVersion, "0"),
                         remoteEndPoint)).ConfigureAwait(false);
                     break;
                 }
@@ -337,6 +358,7 @@ public sealed class GuestPassService
             var found = passes.First(p => p.Id == pass.Id);
             found.GuestUserId = created.UserId;
             found.GuestName = created.UserName;
+            found.DeviceId = deviceId;
             found.EndsAt = endsAt;
             return 0;
         });
@@ -393,7 +415,8 @@ public sealed class GuestPassService
         var isInviter = pass.InviterId == callerId;
         if (!isInviter && caller is not { IsAdmin: true })
         {
-            return GuestErrors.Forbidden;
+            // As for a pass that doesn't exist: nobody learns that someone else's does (G8).
+            return GuestErrors.NotFound;
         }
 
         await EndPassAsync(passId, isInviter ? EndReasons.Ended : EndReasons.Admin).ConfigureAwait(false);
@@ -483,6 +506,26 @@ public sealed class GuestPassService
         return swept;
     }
 
+    /// <summary>
+    /// Ends every live pass whose inviter may no longer invite (taken off the list, made a guest,
+    /// gone): at once when the settings are saved, rather than at the next cleanup.
+    /// </summary>
+    /// <returns>How many ended.</returns>
+    public async Task<int> EndUnallowedAsync()
+    {
+        var settings = _settings();
+        var ids = _store.Read(passes => passes.Where(p => p.EndedAt is null).Select(p => (p.Id, p.InviterId)).ToList())
+            .Where(p => !MayInvite(settings, _accounts.Describe(p.InviterId)))
+            .Select(p => p.Id)
+            .ToList();
+        foreach (var id in ids)
+        {
+            await EndPassAsync(id, EndReasons.InviterRemoved).ConfigureAwait(false);
+        }
+
+        return ids.Count;
+    }
+
     /// <summary>Ends every live pass, for <paramref name="reason"/> (turned off, uninstalled).</summary>
     /// <param name="reason">Why (<see cref="EndReasons"/>).</param>
     /// <returns>How many ended.</returns>
@@ -525,7 +568,11 @@ public sealed class GuestPassService
 
         var orphans = await SweepLeftoversAsync(cancellationToken).ConfigureAwait(false);
 
-        var forgotten = _store.Update(passes => passes.RemoveAll(p => p.EndedAt is { } at && now - at > EndedKept));
+        // An ended pass is forgotten only once its account is gone: the guard knows a guest by
+        // their pass too, so one whose delete keeps failing stays confined until it goes.
+        var accounts = _accounts.GuestUserIds().ToHashSet();
+        var forgotten = _store.Update(passes => passes.RemoveAll(p =>
+            p.EndedAt is { } at && now - at > EndedKept && (p.GuestUserId is not { } guest || !accounts.Contains(guest))));
         if (ended + orphans > 0)
         {
             _logger.LogInformation("Guest passes: {Ended} ended, {Orphans} leftover guest accounts deleted", ended, orphans);
@@ -673,6 +720,7 @@ public sealed class GuestPassService
         EndsAt = p.EndsAt,
         GuestUserId = p.GuestUserId,
         GuestName = p.GuestName,
+        DeviceId = p.DeviceId,
         EndedAt = p.EndedAt,
         EndReason = p.EndReason,
     };

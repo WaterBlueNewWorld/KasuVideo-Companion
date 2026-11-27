@@ -71,6 +71,51 @@ public interface IGuestAccounts
     /// <param name="itemId">A queued item.</param>
     /// <returns>The item, then its family.</returns>
     IReadOnlyList<Guid> Family(Guid itemId);
+
+    /// <summary>
+    /// Whether user <paramref name="userId"/> signs in through the guest provider: a guest's
+    /// account, whether or not the companion still has its pass. Cheap: the guard asks it on every
+    /// request of anyone it doesn't know as a guest.
+    /// </summary>
+    /// <param name="userId">The user.</param>
+    /// <returns>True for a guest's account.</returns>
+    bool IsGuestAccount(Guid userId);
+
+    /// <summary>Whether user <paramref name="userId"/> may see item <paramref name="itemId"/> (their libraries, ratings, tags).</summary>
+    /// <param name="userId">The user.</param>
+    /// <param name="itemId">The item.</param>
+    /// <returns>True when Jellyfin shows it to them.</returns>
+    bool CanSee(Guid userId, Guid itemId);
+
+    /// <summary>The id of user <paramref name="userId"/>'s session on <paramref name="deviceId"/>, or null.</summary>
+    /// <param name="userId">The user.</param>
+    /// <param name="deviceId">The device.</param>
+    /// <returns>Jellyfin's session id.</returns>
+    string? SessionIdOf(Guid userId, string? deviceId);
+
+    /// <summary>The device a transcode with play session <paramref name="playSessionId"/> runs for, or null if none runs.</summary>
+    /// <param name="playSessionId">The play session.</param>
+    /// <returns>Its device.</returns>
+    string? JobDevice(string playSessionId);
+
+    /// <summary>Whether any user already has a device (a token) or a session with id <paramref name="deviceId"/>.</summary>
+    /// <param name="deviceId">A device id.</param>
+    /// <returns>True when it's in use.</returns>
+    bool DeviceInUse(string deviceId);
+
+    /// <summary>The ids of item <paramref name="itemId"/>'s own media sources (its versions).</summary>
+    /// <param name="itemId">The item.</param>
+    /// <returns>The sources' ids, as Jellyfin writes them.</returns>
+    IReadOnlyList<string> MediaSourcesOf(Guid itemId);
+
+    /// <summary>
+    /// Sets SyncPlay's "ignore wait" on user <paramref name="userId"/>'s session on
+    /// <paramref name="deviceId"/>: the group never waits for them (a guest's stall never holds the
+    /// room). Nothing if they have no session.
+    /// </summary>
+    /// <param name="userId">The user.</param>
+    /// <param name="deviceId">The device.</param>
+    void IgnoreWait(Guid userId, string? deviceId);
 }
 
 /// <summary>What the rules need to know about a user.</summary>

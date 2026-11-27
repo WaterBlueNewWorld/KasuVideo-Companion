@@ -73,8 +73,8 @@ From 0.2.0, the settings and guest passes:
 | `GET /KasuVideo/Guests/Invites` | An inviter | Their open passes (links not yet opened, and guests), never with a code. |
 | `POST /KasuVideo/Guests/Invites` | An inviter | `{ "GroupId", "LibraryIds", "Hours" }`: a new invite for a Watch together group they're in. Answers the code, the only time it's given. |
 | `DELETE /KasuVideo/Guests/Invites/{id}` | The pass's inviter, administrators | Ends the pass, and the guest's account. |
-| `POST /KasuVideo/Guests/Invites/Preview` | Anyone (limited per address) | `{ "Code" }`: who invited them and until when the link works; `404 invalid` otherwise, never saying why. |
-| `POST /KasuVideo/Guests/Redeem` | Anyone (limited per address) | `{ "Code", "Nickname", "DeviceId", "DeviceName", "AppVersion" }`: opens the link, once; makes the guest's account and answers its session (`AccessToken`, `UserId`, `UserName`, `ServerId`), the room's `GroupId` and `EndsAt`. |
+| `POST /KasuVideo/Guests/Invites/Preview` | Anyone (wrong codes limited) | `{ "Code" }`: who invited them and until when the link works; `404 invalid` otherwise, never saying why. |
+| `POST /KasuVideo/Guests/Redeem` | Anyone (wrong codes limited) | `{ "Code", "Nickname", "DeviceId", "DeviceName", "AppVersion" }`: opens the link, once; makes the guest's account and answers its session (`AccessToken`, `UserId`, `UserName`, `ServerId`), the room's `GroupId` and `EndsAt`. |
 | `GET /KasuVideo/Guests/Me` | A guest | Their pass: `PassId`, `GroupId`, `InviterId`, `InviterName`, `EndsAt`; `404 not-guest` for anyone else. |
 | `DELETE /KasuVideo/Guests/Me` | A guest whose pass lives | Ends their own pass (KasuVideo's Leave) and deletes their account; it takes no id, so it's only ever the caller's. `404 not-guest` for anyone else (nothing is touched), `403 guest-not-allowed` once the pass no longer lives. |
 | `GET /KasuVideo/Guests/Passes` | Administrators | Every pass, live and ended in the last week, with why each ended. |
@@ -114,7 +114,13 @@ on the server. The design is in KasuVideo's repository (`docs/GUEST_PASSES.md`).
    link's fragment (`/guest#code`), so no server logs it.
 2. **Opening it.** Within `LinkMinutes`, once: the companion makes a hidden user named after the
    visitor's nickname with `-G` at the end (`Mika-G`; `Mika2-G` when taken), signs it in with
-   Jellyfin's `AuthenticateDirect` (as Quick Connect does), and the pass's clock starts.
+   Jellyfin's `AuthenticateDirect` (as Quick Connect does), and the pass's clock starts. The
+   user is made under a random name and given the nickname only once its policy is the guest's
+   (a new user starts with Jellyfin's default policy, which takes an empty password). A device id
+   any user already holds is refused (`400 bad-device`): Jellyfin keys sessions by device, so a
+   guest on it would take over that user's session. The pass keeps the device, and the guard
+   lets the guest's token in only from it. The device's name and KasuVideo's version are cleaned
+   and cut to 64 characters.
 3. **The guest's account** can't sign in with a password: its authentication provider (`KasuVideo
    guest pass`) refuses every one. That provider is also how anything tells a guest: `/Users/Me`
    says `Policy.AuthenticationProviderId` is
@@ -124,9 +130,12 @@ on the server. The design is in KasuVideo's repository (`docs/GUEST_PASSES.md`).
    downloads, sharing, Live TV, preferences, control of others' devices or any management).
 4. **The end.** The guest leaves (KasuVideo's Leave, `DELETE Guests/Me`), or the inviter or an
    administrator ends it, or it reaches its length, or the guest goes `IdleMinutes` without a
-   session, or its inviter is no longer listed, or guest passes are turned off. Ending signs out
-   every device of the guest (their token stops working, and they leave their Watch together
-   group), then deletes the user. Uninstalling the companion ends every pass.
+   session, or its inviter is no longer listed (at once when the settings are saved), or guest
+   passes are turned off, or **the server stops** (a restart, an update, or the companion
+   disabled, which takes effect at the restart: without the companion nothing would confine the
+   guest's token). Ending signs out every device of the guest (their token stops working, and
+   they leave their Watch together group), then deletes the user. Uninstalling the companion
+   ends every pass.
 5. **Leftover accounts.** Two scheduled tasks, under KasuVideo, delete any guest account without
    a live pass (left by a crash, or a delete that failed, say a Leave over a dropped connection;
    or whose pass ran out):
@@ -139,7 +148,10 @@ on the server. The design is in KasuVideo's repository (`docs/GUEST_PASSES.md`).
    opened, its new account isn't on its pass yet, so neither task sweeps then.
 
 The passes are kept in `guest-passes.json` in the plugin's folder
-(`<config>/plugins/Jellyfin.Plugin.KasuVideoCompanion/`); ended ones are forgotten after a week.
+(`<config>/plugins/Jellyfin.Plugin.KasuVideoCompanion/`); ended ones are forgotten after a week,
+once their account is gone. A file that can't be read is set aside
+(`guest-passes.json.unreadable-<time>`) and the store starts empty: the server keeps working, and
+every guest account is refused until the tasks delete it.
 
 **Prior art:** [ShareLinks](https://github.com/Franciskid/jellyfin-plugin-sharelinks) by
 Franciskid (GPL-3.0) makes temporary guest users from links too. The ideas of a hidden user per
@@ -151,21 +163,31 @@ from it; none of its code is used. Guest passes differ by being bound to a KasuV
 A guest's token works in any app, so the companion confines it on the server: every API call
 passes through its guard (`Guests/GuestGuard.cs`, an MVC action filter), and for a guest only
 an allow-list gets through (`Guests/GuestAccessRules.cs`). Everything else answers `403 {
-"Error": "guest-not-allowed" }` (or `guest-item`, `guest-group`).
+"Error": "guest-not-allowed" }` (or `guest-item`, `guest-group`, `guest-device`, `guest-busy`).
+A guest is anyone the companion has a pass for, or any account with the guest provider: one
+without a live pass may only sign out. Every argument that names something is checked, not only
+the route's item: in the route, the query or the body, an item or a media source must be their
+room's (trickplay reads its `mediaSourceId` as an item; a subtitle's query `itemId` wins over its
+route's), and a session, device or play session must be theirs. A request from another device
+than the one their pass was opened on is refused (`guest-device`).
 
-- **Their own session:** `/Users/Me` and their own user, public system info, branding, the
-  server's time (Watch together measures its clock), reading display preferences, localization,
-  reporting capabilities and playback, the bitrate test, fallback fonts, stopping an encode,
+- **Their own session:** `/Users/Me` and their own user, public system info, `/System/Ping`,
+  branding, the server's time (Watch together measures its clock), reading display preferences,
+  localization, reporting capabilities and playback (their own session only, and only their
+  room's items), the bitrate test (2 MiB at most), fallback fonts, stopping their own encode,
   signing out.
 - **Their room's Watch together group:** joining it, asking about it, leaving it, ready,
-  buffering, ping. The group list shows only it. Which groups count: the one the invite was made
+  buffering (12 times a minute at most: `guest-busy`), ping. When they join it, the companion
+  sets SyncPlay's "ignore wait" on their session, so their stalls never hold the room, and a
+  guest can't turn it off. The group list shows only it. Which groups count: the one the invite was made
   in, and any group the inviter is in right now (so the pass follows the room when its group is
   started again). Starting a group and every control (pause, seek, queue, next, stop…) are
   refused: a guest never holds the remote.
 - **What their room plays:** an item, its playback info, its streams (direct, HLS playlists and
   segments), subtitles, attachments, trickplay and media segments, only for items queued in
   those groups, plus an episode's season and series. Items by id (`/Items?ids=…`) only when
-  every one was queued. Pictures are public in Jellyfin anyway.
+  every one was queued, and only what the guest may see. Pictures are public in Jellyfin anyway
+  (their list, with the server's file paths, `GET /Items/{id}/Images`, isn't).
 - **The companion:** `Info`, `RoomSettings`, `Guests/Me` and leaving (`DELETE Guests/Me`, only
   their own pass). Other plugins' routes are refused.
 - **Refused, among the rest:** browsing (libraries, `/Items` without ids, search, Latest,
@@ -173,8 +195,11 @@ an allow-list gets through (`Guests/GuestAccessRules.cs`). Everything else answe
   writing preferences, Quick Connect, settings, the companion's other routes.
 
 Jellyfin doesn't tell a plugin what a group queues or who is in it, so the same guard notes it
-from everyone's SyncPlay requests (`Guests/GroupTracker.cs`): making, joining and leaving a
-group, a session's end, `SetNewQueue` and `Queue`. Kept in memory: groups end with the server.
+from everyone's SyncPlay requests (`Guests/GroupTracker.cs`, written by
+`Guests/GroupRecorder.cs`): making, joining and leaving a group, a session's end, `SetNewQueue`
+and `Queue`. Only what Jellyfin did counts (it answers a refused join or queue 204 too): a join
+once Jellyfin lists the session in the group, a queue from inside it, of what the requester may
+see. Kept in memory, at most 1,000 groups: groups end with the server.
 A group made by a client that queues something without those requests (a stock client starting
 a group while already playing) isn't known, so its items stay closed to guests. The server's
 WebSocket and raw endpoints aren't controller actions and don't pass through the guard.
@@ -229,8 +254,9 @@ dotnet test tests/Jellyfin.Plugin.KasuVideoCompanion.Tests
 ```
 
 The tests (xUnit) run without a Jellyfin server: guest passes' rules, store, codes, names and
-policy, the settings' ranges, the visitors' rate limit, the guard's allow-list and the group
-tracker. A fake stands in for Jellyfin
+policy, the settings' ranges, the visitors' rate limit, the guard's allow-list (with every
+argument it checks), the group tracker and what notes it, the guests' stalls, and passes ending
+when the server stops. A fake stands in for Jellyfin
 (`IGuestAccounts`, which `JellyfinGuestAccounts` implements for real), so what touches Jellyfin
 itself is checked on a server: see [Where it was checked](#where-it-was-checked). The test
 project lives in `tests/` and is never part of the plugin (the plugin's project leaves `tests/`
@@ -245,7 +271,7 @@ out). CI runs it on every push to `main`.
 | `Api/SettingsController.cs` | Settings and RoomSettings. |
 | `Api/GuestsController.cs` | Guest passes' routes. |
 | `Configuration/` | The settings (`PluginConfiguration`) and their ranges (`SettingsBounds`). |
-| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the two scheduled tasks (`GuestPassCleanupTask`, `LeftoverGuestAccountsTask`), the visitors' rate limit, and the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`). |
+| `Guests/` | Guest passes: the rules (`GuestPassService`), the store, codes, names, the guest policy, the provider that refuses passwords, Jellyfin's side (`JellyfinGuestAccounts`), the two scheduled tasks (`GuestPassCleanupTask`, `LeftoverGuestAccountsTask`), the visitors' rate limit, the guard (`GuestGuard`, `GuestAccessRules`, `GroupTracker`, `GroupRecorder`, `GuestStalls`), and the end of every pass when the server stops (`GuestPassesOnStop`). |
 | `tests/` | The tests ([Testing](#testing)). |
 | `Jellyfin.Plugin.KasuVideoCompanion.csproj` | The project; its `<Version>` is the plugin's version. |
 | `build.yaml` | What jprm (Jellyfin's plugin repository tool) needs to package it: name, id, version, `targetAbi`, the catalog's texts and this version's changelog. |
@@ -286,18 +312,36 @@ out). CI runs it on every push to `main`.
   ready allowed; a film queued later let through; a queued episode lets its season and series
   through, not another series; another group's queue stays refused; the owner's new group open
   to the guest; everyone else unaffected; an ended pass's token opens nothing.
+- **KasuVideo's penetration test** (2026-11-26, G8), on 10.11.11 and on a throwaway 12.1.0, before
+  and after its fixes: every Jellyfin action with a guest's token (424 and 419, the hidden routes
+  included; after the fixes none gets through that shouldn't, on either), arguments aimed at
+  other items, sessions, devices and play sessions, the server's WebSocket, the tracker, every
+  route as every role, invite codes and the rate limit, every way a pass ends, the companion
+  disabled and uninstalled, its store lost and corrupt, a guest's stalls, and server stops and
+  restarts. The details are in KasuVideo's `docs/GUEST_PASSES.md`, "Penetration test (G8)". It
+  also saw Jellyfin 10.11 log, at each guest sign-in, that the guest provider isn't registered
+  ("invalid/missing Authentication Provider", then Jellyfin's own invalid provider): passwords
+  are refused either way.
 
 ## Security
 
 Everything needs a signed-in user, except an invite's preview and opening it, which anyone
-holding a link may call: those two are limited to 10 a minute per address and 60 a minute in
-all, and answer the same `invalid` for every kind of bad link. Manifests are written for clients
+holding a link may call: on those two, wrong codes are limited to 10 a minute per address and 60
+a minute in all (`429`, with `Retry-After`), and a real link always goes through; they answer
+the same `invalid` for every kind of bad link. Behind a reverse proxy, Jellyfin's
+`KnownProxies` must list it, or every visitor counts as the proxy's address. Manifests are written for clients
 to read, so every signed-in user may read them; the manifest's own `requiresAdmin` says which
 additions KasuVideo shows only to administrators. What a plugin implements, the settings and the
 list of every pass are for administrators only. Never log a token, an invite code or a manifest's
 content; only a code's SHA-256 is kept. Anything a regular user may call needs `[Authorize]`;
 anything about the plugins themselves or the settings, `[Authorize(Policy =
 Policies.RequiresElevation)]`; the two anonymous routes, `[AllowAnonymous]`.
+
+KasuVideo's penetration test of guest passes (its `docs/GUEST_PASSES.md`, "Penetration test
+(G8)") attacked all of this on 10.11.11 and 12.1.0; its findings are fixed here. Two things it
+recorded are Jellyfin's own, for every user, and outside a plugin's reach: video streams,
+pictures, subtitles and attachments need no sign-in (anyone with an item's id can stream it),
+and a session follows its device id.
 
 ## History
 

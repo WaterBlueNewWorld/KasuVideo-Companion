@@ -65,4 +65,46 @@ public static class GuestNames
             yield return $"{nickname}{i}{Suffix}";
         }
     }
+
+    /// <summary>The most a device's name or an app's version keeps (G8: 10 KB of each was stored).</summary>
+    public const int MaxLabel = 64;
+
+    /// <summary>
+    /// A label a visitor sends (their device's name, KasuVideo's version): control and invisible
+    /// characters dropped, spaces collapsed, at most <see cref="MaxLabel"/> characters, or
+    /// <paramref name="fallback"/> when nothing is left. Jellyfin stores it and shows it in its
+    /// dashboard.
+    /// </summary>
+    /// <param name="raw">What was sent.</param>
+    /// <param name="fallback">What to use when nothing is left.</param>
+    /// <returns>The label.</returns>
+    public static string Label(string? raw, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        var kept = new System.Text.StringBuilder();
+        foreach (var c in raw.Normalize(System.Text.NormalizationForm.FormC))
+        {
+            var category = char.GetUnicodeCategory(c);
+            if (category is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
+                or System.Globalization.UnicodeCategory.Surrogate or System.Globalization.UnicodeCategory.PrivateUse
+                or System.Globalization.UnicodeCategory.OtherNotAssigned)
+            {
+                continue;
+            }
+
+            kept.Append(char.IsWhiteSpace(c) ? ' ' : c);
+        }
+
+        var label = string.Join(' ', kept.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (label.Length > MaxLabel)
+        {
+            label = label[..MaxLabel].TrimEnd();
+        }
+
+        return label.Length == 0 ? fallback : label;
+    }
 }

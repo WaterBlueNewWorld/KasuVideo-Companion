@@ -15,9 +15,15 @@ public sealed class GroupTracker
     /// <summary>The most items remembered per group (the oldest go first).</summary>
     public const int MaxItemsPerGroup = 2000;
 
+    /// <summary>The most groups remembered (the one queued in longest ago goes first).</summary>
+    public const int MaxGroups = 1000;
+
     private readonly object _lock = new();
     private readonly Dictionary<(Guid User, string Device), string> _sessions = [];
     private readonly Dictionary<string, LinkedList<Guid>> _queued = new(StringComparer.Ordinal);
+
+    // Groups by when they last queued something, oldest first.
+    private readonly LinkedList<string> _recent = new();
 
     /// <summary>Session (<paramref name="userId"/>, <paramref name="deviceId"/>) made or joined group <paramref name="groupId"/>.</summary>
     /// <param name="userId">The user.</param>
@@ -86,6 +92,14 @@ public sealed class GroupTracker
             {
                 items = new LinkedList<Guid>();
                 _queued[group] = items;
+            }
+
+            _recent.Remove(group);
+            _recent.AddLast(group);
+            while (_recent.Count > MaxGroups)
+            {
+                _queued.Remove(_recent.First!.Value);
+                _recent.RemoveFirst();
             }
 
             foreach (var id in itemIds.Where(id => id != Guid.Empty))

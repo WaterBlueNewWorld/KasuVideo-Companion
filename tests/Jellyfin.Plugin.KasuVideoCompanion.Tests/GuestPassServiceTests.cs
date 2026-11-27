@@ -183,8 +183,10 @@ public class GuestPassServiceTests : IDisposable
     {
         var pass = _s.Redeem(_s.Invite());
         var id = _s.Service.InvitesOf(Setup.Owner).Single().Id;
-        Assert.Equal("forbidden", await _s.Service.EndAsync(id, Setup.Other));
+        // Someone else's pass answers as one that doesn't exist (G8: nobody learns it does).
+        Assert.Equal("not-found", await _s.Service.EndAsync(id, Setup.Other));
         Assert.Equal("not-found", await _s.Service.EndAsync(Guid.NewGuid(), Setup.Owner));
+        Assert.Empty(_s.Accounts.Ended);
         Assert.Null(await _s.Service.EndAsync(id, Setup.Admin));
         Assert.Equal([pass.UserId], _s.Accounts.Ended);
         var ended = _s.Service.All().Single();

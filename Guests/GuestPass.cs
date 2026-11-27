@@ -47,6 +47,12 @@ public sealed class GuestPass
     /// <summary>Gets or sets the guest's user name (their nickname and <see cref="GuestNames.Suffix"/>).</summary>
     public string? GuestName { get; set; }
 
+    /// <summary>
+    /// Gets or sets the device the link was opened on. The guard lets the guest's token in only
+    /// from it (null for a pass opened before G8: not checked).
+    /// </summary>
+    public string? DeviceId { get; set; }
+
     /// <summary>Gets or sets when the pass ended (UTC); null while it's live.</summary>
     public DateTime? EndedAt { get; set; }
 
@@ -105,4 +111,11 @@ public static class EndReasons
 
     /// <summary>The guest left (KasuVideo's Leave, <c>DELETE Guests/Me</c>).</summary>
     public const string Left = "left";
+
+    /// <summary>
+    /// The server stopped (a restart, an update, or the companion disabled, which takes effect
+    /// then): every pass ends, so a guest is never left with a token and no guard (the owner's
+    /// choice, G8).
+    /// </summary>
+    public const string ServerStopped = "server-stopped";
 }

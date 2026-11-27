@@ -93,6 +93,35 @@ public sealed class FakeAccounts : IGuestAccounts
 
     public IReadOnlyList<Guid> Family(Guid itemId) =>
         [itemId, .. Families.GetValueOrDefault(itemId) ?? []];
+
+    public bool IsGuestAccount(Guid userId) => Users.GetValueOrDefault(userId) is { IsGuest: true };
+
+    /// <summary>Items a user may not see (their libraries, ratings).</summary>
+    public HashSet<(Guid User, Guid Item)> Hidden { get; } = [];
+
+    public bool CanSee(Guid userId, Guid itemId) => !Hidden.Contains((userId, itemId));
+
+    public string? SessionIdOf(Guid userId, string? deviceId) => $"session-{userId:N}-{deviceId}";
+
+    /// <summary>Running transcodes: play session to device.</summary>
+    public Dictionary<string, string> Jobs { get; } = [];
+
+    public string? JobDevice(string playSessionId) => Jobs.GetValueOrDefault(playSessionId);
+
+    /// <summary>Device ids other users hold.</summary>
+    public HashSet<string> DevicesInUse { get; } = [];
+
+    public bool DeviceInUse(string deviceId) => DevicesInUse.Contains(deviceId);
+
+    /// <summary>Items' media sources (their versions).</summary>
+    public Dictionary<Guid, string[]> Sources { get; } = [];
+
+    public IReadOnlyList<string> MediaSourcesOf(Guid itemId) => Sources.GetValueOrDefault(itemId) ?? [itemId.ToString("N")];
+
+    /// <summary>Who SyncPlay was told never to wait for.</summary>
+    public List<(Guid User, string? Device)> IgnoredWaits { get; } = [];
+
+    public void IgnoreWait(Guid userId, string? deviceId) => IgnoredWaits.Add((userId, deviceId));
 }
 
 /// <summary>A service over fakes, in a temporary folder, with an inviter in a group and two libraries.</summary>

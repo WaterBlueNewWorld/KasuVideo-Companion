@@ -61,6 +61,11 @@ public class SettingsController : ControllerBase
         {
             await _passes.EndAllAsync(EndReasons.TurnedOff).ConfigureAwait(false);
         }
+        else
+        {
+            // Someone taken off the inviters' list: their guests' passes end now (G8).
+            await _passes.EndUnallowedAsync().ConfigureAwait(false);
+        }
 
         return CompanionSettings.Of(plugin.Configuration);
     }
