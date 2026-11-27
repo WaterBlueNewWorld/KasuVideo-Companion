@@ -45,7 +45,8 @@ From KasuVideo's penetration test of guest passes (its `docs/GUEST_PASSES.md`, "
 - A guest is known by their provider too, not only by their pass; an unreadable pass file is set
   aside instead of stopping every request on the server.
 - The group tracker notes only what Jellyfin did (it answers a refused join or queue 204 too),
-  and only items the requester may see; it remembers 1,000 groups at most.
+  and only items the requester may see; it remembers 1,000 groups at most. A guest's group list
+  goes out trimmed or not at all: an answer of another shape is refused.
 - A guest never holds their room: SyncPlay's "ignore wait" is set for them when they join, and
   their stalls are limited to 12 a minute.
 - Only wrong codes are rate-limited, and a refusal says when to try again (`Retry-After`): a
